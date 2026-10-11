@@ -1,0 +1,5 @@
+playwright
+pillow
+img2pdf
+questionary
+rich
