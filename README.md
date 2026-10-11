@@ -1,32 +1,54 @@
-# comix-manga-downloader
+# manga-downloader
 
-Interactive script that downloads a manga from comix.to and writes one file per volume
+Interactive script that downloads a manga and writes one file per volume
 (CBZ, PDF, EPUB or plain image folders).
 
-## Setup
+## Supported sites
+
+- fanfox.net (`https://fanfox.net/manga/<title>/`)
+
+## Quick start
+
+Needs Python 3.10 or newer. Run these from the project folder.
+
+Linux / macOS:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/playwright install chromium
+.venv/bin/python manga_dl.py
 ```
 
-## Usage
+Windows (PowerShell):
 
-```sh
-.venv/bin/python comix_dl.py
+```powershell
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python manga_dl.py
 ```
 
-The script asks for the title URL, the download folder, the output format, the language,
-which volumes to fetch, and where to keep temporary page images. If a run is interrupted,
-run it again with the same folders and it resumes from the chapters already downloaded.
+After the first time, only the last line is needed.
 
-## How it works
+## What it asks
 
-The site's API needs a request token and returns encrypted responses, both produced by its
-own JavaScript. The script opens the title page in headless Chromium and calls the site's
-own API client from inside the page, so nothing has to be reimplemented.
+1. The manga URL (it lists the supported sites first).
+2. The download folder (default `./downloads`).
+3. The output format: CBZ, PDF, EPUB or images.
+4. How many chapters per file, if the site has no volume numbers for the title.
+5. Which files to download: all, the first N, or rows from the table like `1-5,8`.
+6. The temp folder for page images, and whether to keep it afterwards.
 
-When a chapter number has several uploads, the one with a volume number is preferred, then
-official releases, then the most voted. Chapters with no volume number go into a single
-"No Volume" file.
+If a run is interrupted, run it again with the same answers and it resumes from the
+chapters already downloaded. Files that already exist are skipped, so delete a file to
+rebuild it.
+
+## Notes
+
+- Files follow the site's volume numbers. Chapters without one are split into files of a
+  fixed number of chapters.
+- Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
+  the original strips; use a reader with a continuous-scroll mode for those.
+- Requests are spaced one second apart (`REQUEST_DELAY` in `manga_dl.py`) so the script
+  goes no faster than a person browsing. A long series takes a while.
+- To add a site, write a class like `FanFox` with `url_re`, `title()`, `chapters()`,
+  `page_urls()` and `image()`, and add it to `SITES`.

@@ -1,4 +1,4 @@
-playwright
+requests
 pillow
 img2pdf
 questionary
