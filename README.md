@@ -43,6 +43,22 @@ After the first time, only the last line is needed.
 Running it again with the same choices resumes where it stopped. Files that already exist
 are skipped, so delete a file to rebuild it.
 
+**Library page**
+
+Every manga you've downloaded gets a card with its cover, how much of the series you have
+(chapters downloaded out of all chapters on the site), and what failed or is still waiting.
+
+- **Continue** picks up chapters from a download that was cancelled or interrupted.
+- **Retry failed** downloads the chapters that failed again.
+- **Open** loads the manga on the Download page with what you already have marked, so you can
+  pick more.
+- Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
+  a "new" badge.
+- If you delete or move a downloaded file, it no longer counts as downloaded and can be
+  downloaded again. The × on a card removes it from the library; your files stay.
+
+History lives in `library/` next to `manga_dl.py` (git-ignored).
+
 **Settings page** (saved to `settings.json` next to `manga_dl.py`; it is git-ignored)
 
 - Theme: light, dark, or match your system (the moon/sun button in the sidebar switches too).

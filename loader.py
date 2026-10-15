@@ -205,3 +205,86 @@ class CatLoader(QWidget):
         p.setPen(Qt.NoPen)
         p.setBrush(color)
         p.drawPath(heart)
+
+
+def paint_mini_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
+    """A tiny version of the loading cat (head and tail) for tight spots, centered in rect."""
+    cat = {k: QColor(v) for k, v in CAT[mode].items()}
+    p.save()
+    scale = min(rect.width() / 40, rect.height() / 24)
+    p.translate(rect.center().x() - 20 * scale, rect.center().y() - 12 * scale)
+    p.scale(scale, scale)
+
+    swish = math.sin(t * 3.2) * 4
+    tail = QPainterPath(QPointF(25, 18))
+    tail.cubicTo(QPointF(32, 19), QPointF(35 + swish * 0.3, 12), QPointF(33 + swish, 6))
+    p.setPen(QPen(cat["line"], 3.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+    p.setPen(QPen(cat["fur"], 1.8, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+
+    p.translate(17, 14 + math.sin(t * 4) * 0.8)
+    p.rotate(math.sin(t * 2.6) * 9)  # curious head tilt
+    p.setPen(QPen(cat["line"], 1.4))
+    p.setBrush(cat["fur"])
+    for side in (-1, 1):
+        ear = QPainterPath(QPointF(side * 8, -2))
+        ear.lineTo(QPointF(side * 7, -10.5))
+        ear.lineTo(QPointF(side * 2, -6))
+        ear.closeSubpath()
+        p.drawPath(ear)
+    p.drawEllipse(QRectF(-10, -8, 20, 16))
+    p.setPen(Qt.NoPen)
+    p.setBrush(cat["ear"])
+    for side in (-1, 1):
+        inner = QPainterPath(QPointF(side * 6.6, -4))
+        inner.lineTo(QPointF(side * 6.4, -8.6))
+        inner.lineTo(QPointF(side * 3.6, -6.2))
+        inner.closeSubpath()
+        p.drawPath(inner)
+
+    blink = (t % 3.0) > 2.82  # a quick blink every few seconds
+    p.setPen(QPen(cat["line"], 1.3, Qt.SolidLine, Qt.RoundCap))
+    p.setBrush(Qt.NoBrush)
+    for ex in (-4.2, 4.2):
+        if blink:
+            p.drawLine(QPointF(ex - 1.8, 0.4), QPointF(ex + 1.8, 0.4))
+        else:
+            p.drawArc(QRectF(ex - 2.2, -1.2, 4.4, 3.2), 20 * 16, 140 * 16)
+    blush = QColor(cat["blush"])
+    blush.setAlphaF(0.6)
+    p.setPen(Qt.NoPen)
+    p.setBrush(blush)
+    for bx in (-6.4, 6.4):
+        p.drawEllipse(QRectF(bx - 2, 2, 4, 2.2))
+    CatLoader._heart(p, QPointF(0, 2.6), 1.4, cat["nose"])
+    p.restore()
+
+
+class MiniCat(QWidget):
+    """A tiny cat "please wait". start() shows and animates it, stop() hides it."""
+
+    def __init__(self, mode: Callable[[], str], size: tuple[int, int] = (40, 24), parent: QWidget | None = None):
+        super().__init__(parent)
+        self._mode = mode
+        self.setFixedSize(*size)
+        self._t0 = time.monotonic()
+        self._timer = QTimer(self, interval=33)
+        self._timer.timeout.connect(self.update)
+        self.hide()
+
+    def start(self) -> None:
+        if not self._timer.isActive():
+            self._t0 = time.monotonic()
+            self._timer.start()
+        self.show()
+
+    def stop(self) -> None:
+        self._timer.stop()
+        self.hide()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        paint_mini_cat(p, QRectF(self.rect()), time.monotonic() - self._t0, self._mode())
+        p.end()

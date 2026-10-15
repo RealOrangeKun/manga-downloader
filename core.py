@@ -132,14 +132,15 @@ class FanFox:
             self._local.session = s
         return self._local.session
 
-    def _get(self, url: str, referer: str = "https://fanfox.net/", retries: int = 3) -> requests.Response:
+    def _get(self, url: str, referer: str = "https://fanfox.net/", retries: int = 3,
+             method: str = "GET") -> requests.Response:
         last = "unknown error"
         for attempt in range(retries):
             self.limiter.wait()
             if attempt:
                 time.sleep(attempt * 2)  # back off a little more after each failure
             try:
-                resp = self._http.get(url, headers={"Referer": referer}, timeout=30)
+                resp = self._http.request(method, url, headers={"Referer": referer}, timeout=30)
                 if resp.status_code == 200:
                     return resp
                 last = f"HTTP {resp.status_code}"
@@ -149,8 +150,17 @@ class FanFox:
                 last = type(e).__name__
         raise SiteError(f"Could not fetch {url}: {last}")
 
-    def info(self) -> MangaInfo:
-        page = self._get(f"https://fanfox.net/manga/{self.slug}/").text
+    @property
+    def key(self) -> str:
+        """Identifies the title across runs, e.g. for download history."""
+        return f"{self.name}:{self.slug}"
+
+    @property
+    def title_url(self) -> str:
+        return f"https://fanfox.net/manga/{self.slug}/"
+
+    def info(self, with_cover: bool = True) -> MangaInfo:
+        page = self._get(self.title_url).text
         title = self._title_re.search(page)
         found = {}
         for path, vol, num in self._chapter_re.findall(page):
@@ -163,7 +173,7 @@ class FanFox:
             status=status.group(1).strip() if status else "",
             genres=re.findall(r'title="([^"]+)"', genres.group(1)) if genres else [],
         )
-        cover = self._cover_re.search(page)
+        cover = self._cover_re.search(page) if with_cover else None
         if cover:
             try:
                 info.cover = self._get(html.unescape(cover.group(1)), retries=1).content
@@ -178,6 +188,12 @@ class FanFox:
         if not urls:
             raise SiteError(f"No pages found for chapter {fmt_num(chapter.number)}")
         return ["https:" + u if u.startswith("//") else u for u in urls]
+
+    def image_size(self, url: str) -> int | None:
+        """Size of an image in bytes, asking only for its headers."""
+        resp = self._get(url, referer="https://m.fanfox.net/", retries=1, method="HEAD")
+        length = resp.headers.get("content-length", "")
+        return int(length) if length.isdigit() else None
 
     def image(self, url: str) -> bytes:
         resp = self._get(url, referer="https://m.fanfox.net/")
@@ -218,6 +234,29 @@ def make_groups(chapters: list[Chapter], per_file: int) -> list[Group]:
     return groups
 
 
+def estimate_chapter_bytes(site, chapters: list[Chapter], samples: int = 3, per_chapter: int = 5) -> float | None:
+    """Average download size of a chapter, from a few chapters spread across the title.
+
+    For each sampled chapter it reads the page list and the sizes of a few pages spread through
+    it, then scales up by the page count. About samples * (1 + per_chapter) small requests.
+    """
+    if not chapters:
+        return None
+    picks = sorted({round(i * (len(chapters) - 1) / max(1, samples - 1)) for i in range(samples)})
+    totals = []
+    for i in picks:
+        try:
+            urls = site.page_urls(chapters[i])
+            spread = sorted({round(k * (len(urls) - 1) / max(1, per_chapter - 1))
+                             for k in range(min(per_chapter, len(urls)))})
+            sizes = [n for n in (site.image_size(urls[k]) for k in spread) if n]
+        except SiteError:
+            continue
+        if sizes:
+            totals.append(sum(sizes) / len(sizes) * len(urls))
+    return sum(totals) / len(totals) if totals else None
+
+
 def safe_name(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .") or "manga"
 
@@ -252,7 +291,7 @@ def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
             if not list(ch_dir.glob(f"{i:04d}.*")):
                 data = site.image(url)
                 (ch_dir / f"{i:04d}{image_ext(data)}").write_bytes(data)
-            on_progress((done + i / len(urls)) / n, f"Chapter {fmt_num(ch.number)}  ·  page {i}/{len(urls)}")
+            on_progress((done + i / len(urls)) / n, f"Ch. {fmt_num(ch.number)}  ·  page {i}/{len(urls)}")
         (ch_dir / ".done").touch()
     return sorted(p for p in group_dir.glob("ch_*/*") if p.name != ".done" and ".conv." not in p.name)
 

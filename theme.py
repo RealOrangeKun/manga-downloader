@@ -107,6 +107,11 @@ QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selec
 }
 QFrame#toast { background: $chip; border-radius: 13px; }
 QFrame#notify { background: $card; border: 2px solid $border; border-radius: 22px; }
+QLabel#libTitle { font-size: 17px; font-weight: 700; }
+QLabel#newBadge {
+    background: $primary_b; color: white; border-radius: 9px; padding: 2px 9px; font-size: 11px; font-weight: 700;
+}
+QProgressBar#libBar { color: $accent_soft; font-size: 12px; }
 QLabel#notifyTitle { font-size: 19px; font-weight: 700; color: $accent; }
 QLabel#notifyBody { font-size: 13px; color: $text; }
 QPushButton#notifyClose { background: transparent; padding: 5px; border-radius: 10px; }
@@ -208,6 +213,10 @@ _ICONS = {
            '<path d="M8.3 12.8q1.3-1.3 2.6 0M13.1 12.8q1.3-1.3 2.6 0" fill="none" stroke="COLOR" stroke-width="1.7" '
            'stroke-linecap="round"/><path d="M11.1 14.5h1.8l-.9 1.1z" fill="COLOR"/>'
            '<path d="M10.2 16.4q.9.8 1.8 0 .9.8 1.8 0" fill="none" stroke="COLOR" stroke-width="1.4" stroke-linecap="round"/>',
+    "library": '<rect x="3.6" y="5" width="4.4" height="14.6" rx="1.4" fill="none" stroke="COLOR" stroke-width="2.1"/>'
+               '<rect x="9.8" y="5" width="4.4" height="14.6" rx="1.4" fill="none" stroke="COLOR" stroke-width="2.1"/>'
+               '<path d="M16 7.6l3.1-.9 2.9 12-3.1.9z" fill="none" stroke="COLOR" stroke-width="2.1" stroke-linejoin="round"/>'
+               '<path d="M5.8 13.2s-1.4-.8-1.4-1.8c0-.5.4-.8.8-.8.3 0 .5.2.6.4.1-.2.3-.4.6-.4.4 0 .8.3.8.8 0 1-1.4 1.8-1.4 1.8z" fill="COLOR"/>',
     "close": '<path d="M7 7l10 10M17 7L7 17" stroke="COLOR" stroke-width="2.6" stroke-linecap="round"/>',
     "refresh": '<path d="M19 12a7 7 0 1 1-2.05-4.95" fill="none" stroke="COLOR" stroke-width="2.4" '
                'stroke-linecap="round"/><path d="M19.2 4.5v3.6h-3.6" fill="none" stroke="COLOR" stroke-width="2.4" '

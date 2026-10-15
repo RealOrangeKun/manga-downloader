@@ -7,13 +7,14 @@ import json
 import os
 import sys
 import threading
+import time
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+    QAbstractItemView, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
     QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -21,7 +22,8 @@ from PySide6.QtWidgets import (
 
 import core
 import theme
-from loader import CatLoader
+from history import History, ago, chapter_key
+from loader import CatLoader, MiniCat, paint_mini_cat
 from builders import FORMATS
 
 # The theme in use (theme.LIGHT or theme.DARK); helpers that paint read it.
@@ -90,6 +92,7 @@ class Bridge(QObject):
     fetch_failed = Signal(str)
     status = Signal(int, str, float, str)  # table row, state, fraction, message
     finished = Signal(list, bool)  # failed rows, cancelled
+    estimated = Signal(object, object)  # MangaInfo, average bytes per chapter (or None)
 
 
 def card() -> tuple[QFrame, QVBoxLayout]:
@@ -170,6 +173,28 @@ def with_hint(field, text: str) -> QWidget:
     return box
 
 
+def fmt_size(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1000 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") or n >= 100 else f"{n:.1f} {unit}"
+        n /= 1000
+    return f"{n:.1f} GB"
+
+
+def fmt_duration(seconds: float, about: bool = True) -> str:
+    seconds = max(0, round(seconds))
+    if about and seconds < 45:
+        return "less than a minute"
+    if seconds < 60:
+        return f"{seconds} s"
+    minutes = round(seconds / 60) if about else seconds // 60
+    if minutes < 60:
+        text = f"{minutes} min" if about else f"{minutes} min {seconds % 60} s"
+    else:
+        text = f"{minutes // 60} h {minutes % 60} min"
+    return f"about {text}" if about else text
+
+
 def folder_row(edit: QLineEdit, title: str) -> QHBoxLayout:
     row = QHBoxLayout()
     row.addWidget(edit, 1)
@@ -188,17 +213,50 @@ def folder_row(edit: QLineEdit, title: str) -> QHBoxLayout:
 # --------------------------------------------------------------------------- download page
 
 
+LOADING = Qt.UserRole + 1  # item flag: draw the little cat instead of text
+
+
+class CatDelegate(QStyledItemDelegate):
+    """Draws a tiny animated cat in cells that are still loading; normal text otherwise."""
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+        if index.data(LOADING):
+            painter.save()
+            painter.setRenderHint(QPainter.Antialiasing)
+            r = QRectF(option.rect)
+            area = QRectF(r.right() - 54, r.center().y() - 13, 46, 26)  # right-aligned like the sizes
+            paint_mini_cat(painter, area, time.monotonic(), CURRENT["mode"])
+            painter.restore()
+
+
+def group_keys(group: core.Group) -> list[str]:
+    return [chapter_key(c.number) for c in group.chapters]
+
+
 class DownloadPage(QWidget):
     completed = Signal(str, int, str)  # title, number of files, folder
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, history: History):
         super().__init__(objectName="page")
         self.settings = settings
+        self.history = history
+        self.key = ""  # history key of the loaded title
+        self.new_keys: set[str] = set()  # chapters that appeared since the title was last opened
+        self._after_fetch = None  # what to do once a title opened from the library has loaded
         self.bridge = Bridge()
         self.bridge.fetched.connect(self._on_fetched)
         self.bridge.fetch_failed.connect(self._on_fetch_failed)
         self.bridge.status.connect(self._on_status)
         self.bridge.finished.connect(self._on_finished)
+        self.bridge.estimated.connect(self._on_estimated)
+        self.bytes_per_chapter: float | None = None
+        self.estimating = False
+        self.states: dict[int, str] = {}
+        self.run_t0 = 0.0
+        self.samples: list[tuple[float, float]] = []  # (time, overall progress) for the time-left estimate
+        self.tick = QTimer(self, interval=1000)
+        self.tick.timeout.connect(self._refresh_run_status)
         self.site = None
         self.info: core.MangaInfo | None = None
         self.groups: list[core.Group] = []
@@ -296,9 +354,14 @@ class DownloadPage(QWidget):
         head.addStretch(1)
         self.summary = label("", "meta")
         head.addWidget(self.summary)
+        self.summary_dots = MiniCat(lambda: CURRENT["mode"])
+        head.addWidget(self.summary_dots)
+        self.summary_wait = label("weighing pages ✧", "meta")
+        self.summary_wait.hide()
+        head.addWidget(self.summary_wait)
         tl.addLayout(head)
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["", "File", "Chapters", "Count", "Progress"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["", "File", "Chapters", "Count", "Size", "Progress"])
         self.table.verticalHeader().hide()
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
@@ -309,7 +372,12 @@ class DownloadPage(QWidget):
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(4, QHeaderView.Stretch)
+        hh.setSectionResizeMode(5, QHeaderView.Stretch)
+        self.table.setItemDelegateForColumn(4, CatDelegate(self.table))
+        hh.setSectionResizeMode(4, QHeaderView.Fixed)  # stays wide enough for the cat while loading
+        self.table.setColumnWidth(4, 100)
+        self.size_anim = QTimer(self, interval=40)
+        self.size_anim.timeout.connect(lambda: self.table.viewport().update())
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.itemChanged.connect(self._update_summary)
         tl.addWidget(self.table)
@@ -342,7 +410,16 @@ class DownloadPage(QWidget):
         self.status_lbl = label("Paste a link to get started ♡", "meta")
         self.overall = QProgressBar(maximum=1000, textVisible=False)
         self.overall.setFixedHeight(12)
-        info.addWidget(self.status_lbl)
+        status_row = QHBoxLayout()
+        status_row.setSpacing(6)
+        status_row.addWidget(self.status_lbl)
+        self.status_dots = MiniCat(lambda: CURRENT["mode"])
+        status_row.addWidget(self.status_dots)
+        self.status_wait = label("weighing pages ✧", "meta")
+        self.status_wait.hide()
+        status_row.addWidget(self.status_wait)
+        status_row.addStretch(1)
+        info.addLayout(status_row)
         info.addWidget(self.overall)
         bl.addLayout(info, 1)
         self.open_btn = set_icon(QPushButton(" Open folder"), "folder")
@@ -410,6 +487,13 @@ class DownloadPage(QWidget):
             self._on_fetch_failed("No chapters found on that page.")
             return
         self.site, self.info = site, info
+        self.key = site.key
+        self.history.prune_missing()
+        entry = self.history.remember(self.key, site.title_url, info.title, len(info.chapters), info.status,
+                                      info.cover)
+        keys = [chapter_key(c.number) for c in info.chapters]
+        self.new_keys = {k for k in keys if k not in set(entry.get("known", []))} if entry.get("known") else set()
+        self.history.mark_seen(self.key, keys)
         self.refresh_cover()
         self.title_lbl.setText(info.title)
         while self.chips.count():
@@ -435,7 +519,46 @@ class DownloadPage(QWidget):
         self.manga_card.show()
         self.files_card.show()
         self.open_btn.hide()
+        self.bytes_per_chapter = None
+        self.estimating = True
         self._regroup()
+
+        def estimate() -> None:
+            try:
+                value = core.estimate_chapter_bytes(site, info.chapters)
+            except Exception:
+                value = None
+            self.bridge.estimated.emit(info, value)
+
+        threading.Thread(target=estimate, daemon=True).start()
+        if self._after_fetch:
+            action, self._after_fetch = self._after_fetch, None
+            action()
+
+    # ---- opening from the library
+
+    def open_manga(self, url: str, action: str = "open") -> None:
+        """Load a title; with action "continue" or "retry", also start downloading what's left or what failed."""
+        self.url.setText(url)
+        if action != "open":
+            self._after_fetch = lambda: self._resume(action == "retry")
+        self._fetch()
+
+    def _resume(self, only_failed: bool) -> None:
+        entry = self.history.get(self.key) or {}
+        run = entry.get("last_run", {})
+        if run.get("format"):
+            self.fmt.setCurrentIndex(max(0, self.fmt.findData(run["format"])))
+        if run.get("per_file") and self.per_file.isVisible():
+            self.per_file.setValue(run["per_file"])
+        if run.get("save_to"):
+            self.save_to.setText(run["save_to"])
+        wanted = set(entry.get("failed" if only_failed else "pending", []))
+        self._check(lambda i: bool(wanted & set(group_keys(self.groups[i]))))
+        if self._checked_rows():
+            self._start()
+        else:
+            self._status("Nothing left to download ♡")
 
     def refresh_cover(self) -> None:
         if self.info:
@@ -463,22 +586,56 @@ class DownloadPage(QWidget):
             count = QTableWidgetItem(str(len(g.chapters)))
             count.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.table.setItem(i, 3, count)
+            size = QTableWidgetItem()
+            size.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.table.setItem(i, 4, size)
             bar = QProgressBar(maximum=1000, value=0, format="")
             bar.setFixedHeight(18)
             holder = QWidget()
             hl = QHBoxLayout(holder)
             hl.setContentsMargins(6, 0, 10, 0)
             hl.addWidget(bar)
-            self.table.setCellWidget(i, 4, holder)
+            self.table.setCellWidget(i, 5, holder)
         self.table.blockSignals(False)
         # Show every row; the page itself scrolls, so the table never needs its own scrollbar.
         rows_h = sum(self.table.rowHeight(i) for i in range(self.table.rowCount()))
         self.table.setFixedHeight(self.table.horizontalHeader().height() + rows_h + 4)
         self.first_n.setMaximum(len(self.groups))
+        self._mark_history()
+        self._fill_sizes()
         self._update_summary()
 
+    def _mark_history(self) -> None:
+        """Show what is already downloaded, failed last time or new, and untick finished files."""
+        entry = self.history.get(self.key)
+        if not entry:
+            return
+        downloaded, failed = entry.get("downloaded", {}), set(entry.get("failed", []))
+        self.table.blockSignals(True)
+        for i, g in enumerate(self.groups):
+            keys = group_keys(g)
+            have = sum(k in downloaded for k in keys)
+            bar = self._bar(i)
+            state = ""
+            if have == len(keys):
+                bar.setValue(1000)
+                bar.setFormat("Downloaded ✓")
+                state = core.DONE
+                self.table.item(i, 0).setCheckState(Qt.Unchecked)
+            elif have:
+                bar.setValue(int(have / len(keys) * 1000))
+                bar.setFormat(f"{have} of {len(keys)} chapters downloaded")
+            elif failed & set(keys):
+                bar.setFormat("Failed last time")
+                state = core.FAILED
+            elif self.new_keys & set(keys):
+                bar.setFormat("New ✧")
+            bar.setProperty("state", state)
+            repolish(bar)
+        self.table.blockSignals(False)
+
     def _bar(self, row: int) -> QProgressBar:
-        return self.table.cellWidget(row, 4).findChild(QProgressBar)
+        return self.table.cellWidget(row, 5).findChild(QProgressBar)
 
     def _checked_rows(self) -> list[int]:
         return [i for i in range(self.table.rowCount()) if self.table.item(i, 0).checkState() == Qt.Checked]
@@ -493,11 +650,63 @@ class DownloadPage(QWidget):
     def _update_summary(self, *_) -> None:
         rows = self._checked_rows()
         chapters = sum(len(self.groups[i].chapters) for i in rows)
-        self.summary.setText(f"{len(rows)} of {len(self.groups)} files  ·  {chapters} chapters selected")
+        size = self._size_text(chapters)
+        self.summary.setText(f"{len(rows)} of {len(self.groups)} files  ·  {chapters} chapters  ·  {size}".rstrip())
+        waiting = self.estimating and bool(rows)
+        # The bottom bar only shows them before a download; once running it shows progress instead.
+        for dots, text, show in ((self.summary_dots, self.summary_wait, waiting),
+                                 (self.status_dots, self.status_wait, waiting and not self.running)):
+            dots.start() if show else dots.stop()
+            text.setVisible(show)
         if not self.running:
             self.start_btn.setEnabled(bool(rows))
-            self.status_lbl.setText(f"Ready to download {len(rows)} files ({chapters} chapters)"
-                                    if rows else "Pick at least one file")
+            if rows:
+                self._status(f"Ready to download {len(rows)} {'file' if len(rows) == 1 else 'files'}",
+                             f"{chapters} chapters  ·  {size}".rstrip())
+            else:
+                self._status("Pick at least one file")
+
+    def _size_text(self, chapters: int) -> str:
+        if self.estimating:
+            return ""  # the little cat stands in for it
+        if not self.bytes_per_chapter:
+            return "size unknown"
+        return f"about {fmt_size(self.bytes_per_chapter * chapters)}"
+
+    def _fill_sizes(self) -> None:
+        """Estimated download size of each file: the average chapter size times its chapters."""
+        self.table.blockSignals(True)
+        for i, g in enumerate(self.groups):
+            item = self.table.item(i, 4)
+            item.setData(LOADING, self.estimating)
+            if self.estimating:
+                text = ""
+            elif self.bytes_per_chapter:
+                text = f"~{fmt_size(self.bytes_per_chapter * len(g.chapters))}"
+            else:
+                text = "?"
+            item.setText(text)
+        self.table.blockSignals(False)
+        if self.estimating:
+            self.size_anim.start()
+        else:
+            self.size_anim.stop()
+
+    def _on_estimated(self, info, value) -> None:
+        if info is not self.info:  # a different title was looked up meanwhile
+            return
+        self.bytes_per_chapter = value
+        self.estimating = False
+        self._fill_sizes()
+        self._update_summary()
+
+    def _status(self, headline: str, detail: str = "") -> None:
+        """Bottom bar text: a bold pink headline and quieter details after it."""
+        accent = theme.color(CURRENT["mode"], "accent").name()
+        text = f"<span style='font-size:15px; font-weight:600; color:{accent}'>{html.escape(headline)}</span>"
+        if detail:
+            text += f"&nbsp;&nbsp;&nbsp;{html.escape(detail)}"
+        self.status_lbl.setText(text)
 
     # ---- downloading
 
@@ -528,6 +737,12 @@ class DownloadPage(QWidget):
         self.running = True
         self.cancel = threading.Event()
         self.fractions = {r: 0.0 for r in rows}
+        self.states = {r: core.QUEUED for r in rows}
+        self.run_t0 = time.monotonic()
+        self.status_dots.stop()
+        self.status_wait.hide()
+        self.samples = []
+        self.tick.start()
         self._set_locked(True)
         self.start_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
@@ -536,14 +751,15 @@ class DownloadPage(QWidget):
         self.open_btn.hide()
         self.bar_cat.start()
         self.overall.setValue(0)
-        for i in range(self.table.rowCount()):
+        for i in rows:  # other rows keep showing what is already downloaded
             bar = self._bar(i)
             bar.setValue(0)
-            bar.setFormat(core.QUEUED if i in rows else "")
+            bar.setFormat(core.QUEUED)
             bar.setProperty("state", "")
             repolish(bar)
-        self.status_lbl.setText(f"Downloading {len(rows)} files with {workers} "
-                                f"{'worker' if workers == 1 else 'workers'} ({mode})…")
+        self.history.start_run(self.key, [k for r in rows for k in group_keys(self.groups[r])],
+                               fmt, self.per_file.value(), str(save_to))
+        self._refresh_run_status()
 
         groups = [self.groups[r] for r in rows]
 
@@ -561,7 +777,7 @@ class DownloadPage(QWidget):
         bar = self._bar(row)
         bar.setValue(int(frac * 1000))
         if state == core.DOWNLOADING:
-            bar.setFormat(msg)
+            bar.setFormat(f"{int(frac * 100)}%  ·  {msg}")
         elif state == core.BUILDING:
             bar.setFormat(msg + "…")
         else:
@@ -573,24 +789,53 @@ class DownloadPage(QWidget):
         if state == core.FAILED:
             bar.setValue(1000)
         self.fractions[row] = 1.0 if state in (core.DONE, core.SKIPPED, core.FAILED) else frac
-        done = sum(self.fractions.values())
-        self.overall.setValue(int(done / len(self.fractions) * 1000))
+        self.states[row] = state
+        if state in (core.DONE, core.SKIPPED):
+            self.history.file_done(self.key, group_keys(self.groups[row]), msg)
+        elif state == core.FAILED:
+            self.history.file_failed(self.key, group_keys(self.groups[row]))
+        self.overall.setValue(int(self._overall() * 1000))
+
+    def _overall(self) -> float:
+        return sum(self.fractions.values()) / len(self.fractions) if self.fractions else 0.0
+
+    def _refresh_run_status(self) -> None:
+        """Percentage, files done and time left, refreshed every second while downloading."""
+        if not self.running:
+            return
+        now, overall = time.monotonic(), self._overall()
+        self.samples = [(t, v) for t, v in self.samples if now - t <= 30] + [(now, overall)]
+        finished = sum(1 for st in self.states.values() if st in (core.DONE, core.SKIPPED, core.FAILED))
+        detail = f"{finished} of {len(self.states)} files done  ·  {self._eta(now, overall)}"
+        self._status(f"Downloading… {int(overall * 100)}%", detail)
+
+    def _eta(self, now: float, overall: float) -> str:
+        elapsed = now - self.run_t0
+        if overall < 0.01 or elapsed < 4:
+            return "working out the time left…"
+        rate = overall / elapsed  # average since the start
+        t_old, v_old = self.samples[0]
+        if now - t_old >= 5 and overall > v_old:  # blend in the last 30 seconds, which reacts faster
+            rate = (rate + (overall - v_old) / (now - t_old)) / 2
+        return fmt_duration((1 - overall) / rate) + " left"
 
     def _on_finished(self, failed: list[int], cancelled: bool) -> None:
         self.running = False
+        self.tick.stop()
         self.bar_cat.stop()
         self._set_locked(False)
         self.cancel_btn.hide()
         self.open_btn.show()
         self._update_summary()
+        took = fmt_duration(time.monotonic() - self.run_t0, about=False)
         if cancelled:
-            self.status_lbl.setText("Cancelled. Run it again with the same choices to resume.")
+            self._status("Cancelled", "Run it again with the same choices to resume")
         elif failed:
-            self.status_lbl.setText(f"{len(failed)} of {len(self.fractions)} files failed (hover a bar for "
-                                    "the reason). Run again to resume ✧")
+            self._status(f"{len(failed)} of {len(self.fractions)} files failed",
+                         "Hover a bar for the reason, then run again to resume ✧")
         else:
             self.overall.setValue(1000)
-            self.status_lbl.setText(f"All done ♡  Files are in {self.book_dir}")
+            self._status("All done ♡", f"Took {took}  ·  {self.book_dir}")
             self.completed.emit(self.info.title, len(self.fractions), str(self.book_dir))
 
     def _cancel(self) -> None:
@@ -762,6 +1007,203 @@ class SettingsPage(QWidget):
 # --------------------------------------------------------------------------- window
 
 
+class LibraryBridge(QObject):
+    checked = Signal(str, int, str, list)  # key, total chapters, status, chapter keys
+    check_failed = Signal(str)
+    checks_done = Signal()
+
+
+class LibraryPage(QWidget):
+    """Every manga downloaded so far, how complete it is, and buttons to carry on."""
+    open_requested = Signal(str, str)  # url, action: "open", "continue" or "retry"
+
+    def __init__(self, settings: Settings, history: History):
+        super().__init__(objectName="page")
+        self.settings = settings
+        self.history = history
+        self.cards: dict[str, dict] = {}
+        self.checking = False
+        self.bridge = LibraryBridge()
+        self.bridge.checked.connect(self._on_checked)
+        self.bridge.check_failed.connect(lambda key: self._set_checking(key, False))
+        self.bridge.checks_done.connect(self._on_checks_done)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        body = QWidget()
+        self.col = QVBoxLayout(body)
+        self.col.setContentsMargins(32, 28, 32, 28)
+        self.col.setSpacing(16)
+        scroll.setWidget(body)
+        outer.addWidget(scroll)
+
+        head = QHBoxLayout()
+        head.addWidget(label("Library ✧", "h1"))
+        head.addStretch(1)
+        self.check_cat = MiniCat(lambda: CURRENT["mode"])
+        head.addWidget(self.check_cat)
+        self.check_lbl = label("", "meta")
+        head.addWidget(self.check_lbl)
+        self.col.addLayout(head)
+
+        self.empty, el = card()
+        erow = QHBoxLayout()
+        erow.addStretch(1)
+        self.empty_cat = CatLoader(lambda: CURRENT["mode"], (140, 112))
+        erow.addWidget(self.empty_cat)
+        etext = QVBoxLayout()
+        etext.addStretch(1)
+        etext.addWidget(label("Nothing here yet", "h2"))
+        etext.addWidget(label("Download a manga and it will show up here ✧", "hint"))
+        etext.addStretch(1)
+        erow.addLayout(etext)
+        erow.addStretch(1)
+        el.addLayout(erow)
+        self.col.addWidget(self.empty)
+        self.list = QVBoxLayout()
+        self.list.setSpacing(16)
+        self.col.addLayout(self.list)
+        self.col.addStretch(1)
+
+    def refresh(self) -> None:
+        """Rebuild the cards from history, then look for new chapters in the background."""
+        self.history.prune_missing()
+        while self.list.count():
+            w = self.list.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        self.cards.clear()
+        entries = self.history.entries()
+        self.empty.setVisible(not entries)
+        self.empty_cat.start() if not entries else self.empty_cat.stop()
+        for key, entry in entries:
+            self.list.addWidget(self._card(key, entry))
+        self._check_for_new(entries)
+
+    def _card(self, key: str, entry: dict) -> QFrame:
+        frame, layout = card()
+        row = QHBoxLayout()
+        row.setSpacing(18)
+        cover = QLabel()
+        cover.setFixedSize(84, 120)
+        path = self.history.cover_path(key)
+        cover.setPixmap(rounded_pixmap(path.read_bytes() if path.exists() else None, 84, 120, 12))
+        row.addWidget(cover, 0, Qt.AlignTop)
+
+        col = QVBoxLayout()
+        col.setSpacing(6)
+        top = QHBoxLayout()
+        top.addWidget(label(entry.get("title", key), "libTitle"))
+        badge = label("", "newBadge")
+        badge.hide()
+        top.addWidget(badge)
+        cat = MiniCat(lambda: CURRENT["mode"])
+        top.addWidget(cat)
+        top.addStretch(1)
+        forget = set_icon(QPushButton(objectName="notifyClose"), "close", "muted", 14)
+        forget.setToolTip("Remove from library (your downloaded files stay where they are)")
+        forget.setCursor(Qt.PointingHandCursor)
+        forget.clicked.connect(lambda: (self.history.forget(key), self.refresh()))
+        top.addWidget(forget)
+        col.addLayout(top)
+
+        bar = QProgressBar(objectName="libBar", maximum=1000)
+        bar.setFixedHeight(18)
+        col.addWidget(bar)
+        meta = label("", "meta", wrap=True)
+        col.addWidget(meta)
+        when = label("", "hint")
+        col.addWidget(when)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        pending, failed = entry.get("pending", []), entry.get("failed", [])
+        url = entry.get("url", "")
+        if pending:
+            go = set_icon(QPushButton(" Continue", objectName="primary"), "download", "white")
+            go.setToolTip(f"Download the {len(pending)} chapters that didn't finish last time")
+            go.clicked.connect(lambda: self.open_requested.emit(url, "continue"))
+            buttons.addWidget(go)
+        if failed:
+            retry = set_icon(QPushButton(" Retry failed"), "refresh")
+            retry.setToolTip(f"Try the {len(failed)} chapters that failed again")
+            retry.clicked.connect(lambda: self.open_requested.emit(url, "retry"))
+            buttons.addWidget(retry)
+        open_btn = set_icon(QPushButton(" Open"), "library")
+        open_btn.setToolTip("Open it on the Download page to pick more chapters")
+        open_btn.clicked.connect(lambda: self.open_requested.emit(url, "open"))
+        buttons.addWidget(open_btn)
+        col.addLayout(buttons)
+        row.addLayout(col, 1)
+        layout.addLayout(row)
+
+        self.cards[key] = {"bar": bar, "meta": meta, "when": when, "badge": badge, "cat": cat}
+        self._fill(key)
+        return frame
+
+    def _fill(self, key: str) -> None:
+        entry, w = self.history.get(key), self.cards.get(key)
+        if not entry or not w:
+            return
+        pct = History.percent(entry)
+        w["bar"].setValue(int(pct * 1000))
+        w["bar"].setFormat(f"{pct * 100:.0f}%")
+        parts = [f"{len(entry.get('downloaded', {}))} of {entry.get('total_chapters', '?')} chapters"]
+        if entry.get("failed"):
+            parts.append(f"{len(entry['failed'])} failed")
+        if entry.get("pending"):
+            parts.append(f"{len(entry['pending'])} waiting")
+        if entry.get("status"):
+            parts.append(entry["status"])
+        w["meta"].setText("  ·  ".join(parts))
+        w["when"].setText(f"Last download: {ago(entry.get('last_download'))}")
+        new = entry.get("new_chapters", 0)
+        w["badge"].setText(f"{new} new ✧")
+        w["badge"].setVisible(bool(new))
+
+    def _set_checking(self, key: str, on: bool) -> None:
+        cat = self.cards.get(key, {}).get("cat")
+        if cat:
+            cat.start() if on else cat.stop()
+
+    def _check_for_new(self, entries: list[tuple[str, dict]]) -> None:
+        # Skip titles checked in the last few minutes, so flipping between pages doesn't hammer the site.
+        due = [(k, e) for k, e in entries if time.time() - e.get("last_check", 0) > 300 and e.get("url")]
+        if self.checking or not due:
+            return
+        self.checking = True
+        for key, _ in due:
+            self._set_checking(key, True)
+        self.check_cat.start()
+        self.check_lbl.setText("checking for new chapters…")
+        limiter = core.RateLimiter(self.settings.request_delay)
+
+        def work() -> None:
+            for key, entry in due:
+                site_cls = core.site_for(entry["url"])
+                try:
+                    info = site_cls(entry["url"], limiter).info(with_cover=False)
+                    keys = [chapter_key(c.number) for c in info.chapters]
+                    self.bridge.checked.emit(key, len(keys), info.status, keys)
+                except Exception:
+                    self.bridge.check_failed.emit(key)
+            self.bridge.checks_done.emit()
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_checked(self, key: str, total: int, status: str, keys: list) -> None:
+        if self.history.get(key):
+            self.history.checked(key, total, status, keys)
+        self._set_checking(key, False)
+        self._fill(key)
+
+    def _on_checks_done(self) -> None:
+        self.checking = False
+        self.check_cat.stop()
+        self.check_lbl.setText("")
+
+
 class Notification(QWidget):
     """A card that fades in at the bottom right with a happy cat when a download is finished."""
 
@@ -890,17 +1332,23 @@ class MainWindow(QWidget):
         sl.addWidget(label("cute & cozy ✧", "tagline"))
         sl.addSpacing(22)
         self.stack = QStackedWidget()
-        self.download = DownloadPage(self.settings)
+        self.history = History()
+        self.download = DownloadPage(self.settings, self.history)
+        self.library = LibraryPage(self.settings, self.history)
+        self.library.open_requested.connect(self._open_from_library)
         self.settings_page = SettingsPage(self.settings)
         self.settings_page.changed.connect(lambda: self.apply_theme(self.settings.theme))
-        self.stack.addWidget(self.download)
-        self.stack.addWidget(self.settings_page)
+        for page in (self.download, self.library, self.settings_page):
+            self.stack.addWidget(page)
         nav = QButtonGroup(self)
-        for i, (text, icon_name) in enumerate([("  Download", "download"), ("  Settings", "settings")]):
+        self.nav_buttons = []
+        for i, (text, icon_name) in enumerate([("  Download", "download"), ("  Library", "library"),
+                                               ("  Settings", "settings")]):
             b = set_icon(QPushButton(text, objectName="nav", checkable=True), icon_name, "side_text", 20)
             b.setCursor(Qt.PointingHandCursor)
-            b.clicked.connect(lambda _=False, i=i: self.stack.setCurrentIndex(i))
+            b.clicked.connect(lambda _=False, i=i: self.show_page(i))
             nav.addButton(b)
+            self.nav_buttons.append(b)
             sl.addWidget(b)
             if i == 0:
                 b.setChecked(True)
@@ -964,6 +1412,19 @@ class MainWindow(QWidget):
             pass  # the toggle still works for this session
         self.settings_page._update_dirty()
         self.apply_theme(self.settings.theme)
+
+    def show_page(self, index: int) -> None:
+        self.nav_buttons[index].setChecked(True)
+        self.stack.setCurrentIndex(index)
+        if self.stack.currentWidget() is self.library:
+            self.library.refresh()
+
+    def _open_from_library(self, url: str, action: str) -> None:
+        if self.download.running:
+            self.download._status("A download is still running", "Wait for it to finish, then try again ✧")
+        else:
+            self.download.open_manga(url, action)
+        self.show_page(0)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
