@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import sys
@@ -9,11 +10,11 @@ import threading
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
-    QFormLayout, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
+    QFormLayout, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
     QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
@@ -188,6 +189,8 @@ def folder_row(edit: QLineEdit, title: str) -> QHBoxLayout:
 
 
 class DownloadPage(QWidget):
+    completed = Signal(str, int, str)  # title, number of files, folder
+
     def __init__(self, settings: Settings):
         super().__init__(objectName="page")
         self.settings = settings
@@ -588,6 +591,7 @@ class DownloadPage(QWidget):
         else:
             self.overall.setValue(1000)
             self.status_lbl.setText(f"All done ♡  Files are in {self.book_dir}")
+            self.completed.emit(self.info.title, len(self.fractions), str(self.book_dir))
 
     def _cancel(self) -> None:
         self.cancel.set()
@@ -758,6 +762,104 @@ class SettingsPage(QWidget):
 # --------------------------------------------------------------------------- window
 
 
+class Notification(QWidget):
+    """A card that fades in at the bottom right with a happy cat when a download is finished."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.folder = ""
+        self.fade = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.fade)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(18, 18, 18, 18)  # room for the shadow
+        box = QFrame(objectName="notify")
+        shadow = QGraphicsDropShadowEffect(blurRadius=34, xOffset=0, yOffset=8)
+        shadow.setColor(QColor(255, 92, 154, 70))
+        box.setGraphicsEffect(shadow)
+        outer.addWidget(box)
+
+        row = QHBoxLayout(box)
+        row.setContentsMargins(16, 14, 12, 16)
+        row.setSpacing(12)
+        self.cat = CatLoader(lambda: CURRENT["mode"], (112, 90), celebrate=True)
+        row.addWidget(self.cat, 0, Qt.AlignVCenter)
+        col = QVBoxLayout()
+        col.setSpacing(6)
+        head = QHBoxLayout()
+        head.addWidget(label("Yay, it's ready!", "notifyTitle"))
+        head.addStretch(1)
+        close = set_icon(QPushButton(objectName="notifyClose"), "close", "muted", 14)
+        close.setCursor(Qt.PointingHandCursor)
+        close.clicked.connect(self.dismiss)
+        head.addWidget(close)
+        col.addLayout(head)
+        self.body = label("", "notifyBody", wrap=True)
+        col.addWidget(self.body)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        open_btn = set_icon(QPushButton(" Open folder"), "folder")
+        open_btn.clicked.connect(self._open)
+        buttons.addWidget(open_btn)
+        col.addSpacing(4)
+        col.addLayout(buttons)
+        row.addLayout(col, 1)
+
+        self.setFixedWidth(460)
+        self.anim = QPropertyAnimation(self.fade, b"opacity", self)
+        self.anim.setEasingCurve(QEasingCurve.OutCubic)
+        self.anim.finished.connect(self._faded)
+        self.timer = QTimer(self, singleShot=True, interval=10_000)
+        self.timer.timeout.connect(self.dismiss)
+        self.hide()
+
+    def popup(self, title: str, files: int, folder: str) -> None:
+        self.folder = folder
+        self.body.setText(f"<b>{html.escape(title)}</b> is all downloaded! "
+                          f"{files} {'file is' if files == 1 else 'files are'} waiting for you. Happy reading ✧")
+        self.adjustSize()
+        self.reposition()
+        self.show()
+        self.raise_()
+        self.cat.start()
+        self._fade(1.0)
+        self.timer.start()
+
+    def dismiss(self) -> None:
+        self.timer.stop()
+        self._fade(0.0)
+
+    def _fade(self, to: float) -> None:
+        self.anim.stop()
+        self.anim.setDuration(350 if to else 250)
+        self.anim.setStartValue(self.fade.opacity() if self.isVisible() and to == 0 else 0.0)
+        self.anim.setEndValue(to)
+        self.anim.start()
+
+    def _faded(self) -> None:
+        if self.anim.endValue() == 0:  # finished fading out
+            self.cat.stop()
+            self.hide()
+
+    def _open(self) -> None:
+        if self.folder and Path(self.folder).exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.folder))
+        self.dismiss()
+
+    def reposition(self) -> None:
+        parent = self.parentWidget()
+        self.move(parent.width() - self.width() - 12, parent.height() - self.height() - 96)
+
+    # Hovering keeps it open; it goes away a few seconds after the mouse leaves.
+    def enterEvent(self, event) -> None:
+        self.timer.stop()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        if self.isVisible():
+            self.timer.start(4000)
+        super().leaveEvent(event)
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__(objectName="root")
@@ -823,6 +925,9 @@ class MainWindow(QWidget):
         layout.addWidget(side)
         layout.addWidget(self.stack, 1)
 
+        self.notification = Notification(self)
+        self.download.completed.connect(self.notification.popup)
+
         hints = QGuiApplication.styleHints()
         if hasattr(hints, "colorSchemeChanged"):  # Qt 6.5+: follow the system switching light/dark
             hints.colorSchemeChanged.connect(lambda *_: self.apply_theme(self.settings.theme))
@@ -859,6 +964,11 @@ class MainWindow(QWidget):
             pass  # the toggle still works for this session
         self.settings_page._update_dirty()
         self.apply_theme(self.settings.theme)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "notification"):
+            self.notification.reposition()
 
     def closeEvent(self, event) -> None:
         # Let running workers stop after their current page instead of leaving half-written files.

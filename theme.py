@@ -106,6 +106,11 @@ QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selec
     background: $selection; color: $accent_soft;
 }
 QFrame#toast { background: $chip; border-radius: 13px; }
+QFrame#notify { background: $card; border: 2px solid $border; border-radius: 22px; }
+QLabel#notifyTitle { font-size: 19px; font-weight: 700; color: $accent; }
+QLabel#notifyBody { font-size: 13px; color: $text; }
+QPushButton#notifyClose { background: transparent; padding: 5px; border-radius: 10px; }
+QPushButton#notifyClose:hover { background: $button; }
 QLabel#toastText { background: transparent; color: $accent_soft; font-size: 14px; font-weight: 600; }
 QFrame#toast[error="true"] QLabel#toastText { color: $error; }
 QLabel#pathTitle { font-size: 14px; font-weight: 600; }

@@ -20,13 +20,18 @@ CAT = {
 
 
 class CatLoader(QWidget):
-    """Call start() to show and animate it, stop() to hide it."""
+    """Call start() to show and animate it, stop() to hide it.
+
+    With celebrate=True the cat hops happily and hearts float up instead of sleepy z's.
+    """
 
     W, H = 120.0, 96.0  # drawing coordinates; scaled to the widget size
 
-    def __init__(self, mode: Callable[[], str], size: tuple[int, int] = (120, 96), parent: QWidget | None = None):
+    def __init__(self, mode: Callable[[], str], size: tuple[int, int] = (120, 96), parent: QWidget | None = None,
+                 celebrate: bool = False):
         super().__init__(parent)
         self._mode = mode
+        self._celebrate = celebrate
         self.setFixedSize(*size)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._t0 = time.monotonic()
@@ -55,12 +60,18 @@ class CatLoader(QWidget):
         p.translate((self.width() - self.W * scale) / 2, (self.height() - self.H * scale) / 2)
         p.scale(scale, scale)
 
-        breathe = math.sin(t * 2.2) * 1.2  # slow sleepy bob
-        self._tail(p, t, cat)
+        if self._celebrate:
+            breathe = -abs(math.sin(t * 3.4)) * 3.5  # happy little hops
+        else:
+            breathe = math.sin(t * 2.2) * 1.2  # slow sleepy bob
+        self._tail(p, t * (1.8 if self._celebrate else 1), cat)
         self._head(p, t, breathe, cat)
         self._book(p, mode)
         self._paws(p, breathe, cat)
-        self._sparkle(p, t, mode)
+        if self._celebrate:
+            self._hearts(p, t, mode)
+        else:
+            self._sparkle(p, t, mode)
         p.end()
 
     def _tail(self, p: QPainter, t: float, cat: dict) -> None:
@@ -119,6 +130,8 @@ class CatLoader(QWidget):
         mouth.quadTo(QPointF(cx - 2.5, cy + 12), QPointF(cx, cy + 9.5))
         mouth.quadTo(QPointF(cx + 2.5, cy + 12), QPointF(cx + 5, cy + 9))
         p.drawPath(mouth)
+        if self._celebrate:
+            return
         # Sleepy "z" drifting up now and then.
         phase = (t % 2.6) / 2.6
         z = QColor(cat["line"])
@@ -171,6 +184,16 @@ class CatLoader(QWidget):
         p.setPen(Qt.NoPen)
         p.setBrush(theme.color(mode, "accent"))
         p.drawPath(star)
+
+    def _hearts(self, p: QPainter, t: float, mode: str) -> None:
+        """Little hearts floating up and fading, for the celebrating cat."""
+        base = theme.color(mode, "primary_b")
+        for k, x0 in enumerate((24, 96, 60)):
+            phase = (t * 0.55 + k / 3) % 1
+            color = QColor(base)
+            color.setAlphaF(max(0.0, 1 - phase) * 0.9)
+            x = x0 + math.sin(phase * 6 + k) * 4
+            self._heart(p, QPointF(x, 46 - phase * 42), 3.4 + k * 0.6, color)
 
     @staticmethod
     def _heart(p: QPainter, c: QPointF, r: float, color: QColor) -> None:
