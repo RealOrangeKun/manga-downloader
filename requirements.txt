@@ -1,5 +1,4 @@
 requests
 pillow
 img2pdf
-questionary
-rich
+PySide6

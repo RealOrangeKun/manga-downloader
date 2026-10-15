@@ -1,6 +1,6 @@
 # manga-downloader
 
-Interactive script that downloads a manga and writes one file per volume
+A small pink desktop app that downloads a manga and saves it as one file per volume
 (CBZ, PDF, EPUB or plain image folders).
 
 ## Supported sites
@@ -29,26 +29,44 @@ py -m venv .venv
 
 After the first time, only the last line is needed.
 
-## What it asks
+## Using it
 
-1. The manga URL (it lists the supported sites first).
-2. The download folder (default `./downloads`).
-3. The output format: CBZ, PDF, EPUB or images.
-4. How many chapters per file, if the site has no volume numbers for the title.
-5. Which files to download: all, the first N, or rows from the table like `1-5,8`.
-6. The temp folder for page images, and whether to keep it afterwards.
+**Download page**
 
-If a run is interrupted, run it again with the same answers and it resumes from the
-chapters already downloaded. Files that already exist are skipped, so delete a file to
-rebuild it.
+1. Paste a title link and press **Find**. The cover, title, genres and chapter count appear.
+2. Pick the format, the folder to save to and, if the site has no volume numbers for the
+   title, how many chapters go in each file.
+3. Tick the files you want in the table (or use Select all / none / first N).
+4. Press **Download**. Each file gets its own progress bar; **Cancel** stops after the
+   current page, and **Open folder** shows the results when it's done.
+
+Running it again with the same choices resumes where it stopped. Files that already exist
+are skipped, so delete a file to rebuild it.
+
+**Settings page** (saved to `settings.json` next to `manga_dl.py`; it is git-ignored)
+
+- Theme: light, dark, or match your system (the moon/sun button in the sidebar switches too).
+- Default download folder and temp folder, and whether to keep temp files.
+- Default format and chapters per file.
+- **Files at once**: how many files are made in parallel. `1` does one at a time.
+- **Run downloads on**: threads (recommended) or separate processes. Downloading mostly waits
+  on the network, so processes rarely help; building files uses separate cores either way.
+- **Delay between requests**: shared by all workers, so more workers never means more
+  requests per second. Sites ask for human browsing speed; going too low can get you blocked.
+
+## How the parallel part works
+
+Downloads run on real OS threads; Python releases the GIL while waiting on the network, so
+they run at the same time. Building files (EPUB slicing, PDF, image conversion) is CPU work,
+so it runs in separate processes and can use several cores at once.
 
 ## Notes
 
-- Files follow the site's volume numbers. Chapters without one are split into files of a
-  fixed number of chapters.
 - Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
   the original strips; use a reader with a continuous-scroll mode for those.
-- Requests are spaced one second apart (`REQUEST_DELAY` in `manga_dl.py`) so the script
-  goes no faster than a person browsing. A long series takes a while.
-- To add a site, write a class like `FanFox` with `url_re`, `title()`, `chapters()`,
-  `page_urls()` and `image()`, and add it to `SITES`.
+- Code layout: `core.py` (sites, rate limiting, download pipeline), `builders.py` (output
+  formats), `gui.py` (the window). To add a site, write a class like `FanFox` in `core.py`
+  with `url_re`, `info()`, `page_urls()` and `image()`, and add it to `SITES`.
+- The interface uses the bundled [Fredoka](https://github.com/hafontia/Fredoka-One) font
+  (`assets/fonts`, SIL Open Font License, see `assets/fonts/OFL.txt`). The icons and the
+  little book mascot in `theme.py` and `assets/icons` were drawn for this project.

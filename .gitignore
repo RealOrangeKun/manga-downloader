@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 downloads/
 .manga-tmp/
+settings.json
