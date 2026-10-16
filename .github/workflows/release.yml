@@ -31,9 +31,16 @@ jobs:
         id: version
         run: python scripts/next_version.py --notes notes.md --write-version
 
+      # PyInstaller's ready-made bootloader (the exe's launcher) is the same file in every app built
+      # with it, malware included, so antivirus often flags it. Compiling our own (MSVC is on the
+      # runner) gives a launcher nobody else has.
       - name: Install dependencies
         if: steps.version.outputs.release == 'true'
-        run: python -m pip install -r requirements.txt pyinstaller
+        env:
+          PYINSTALLER_COMPILE_BOOTLOADER: "1"
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller --no-binary pyinstaller --verbose
 
       - name: Build the exe
         if: steps.version.outputs.release == 'true'
