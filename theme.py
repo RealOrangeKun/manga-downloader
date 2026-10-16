@@ -60,7 +60,11 @@ QLabel#sitePill {
     font-size: 12px; font-weight: 600;
 }
 QLabel#greeting { color: $accent; font-size: 17px; font-weight: 700; padding-left: 4px; }
-QLabel#version { color: $muted; font-size: 11px; padding-left: 4px; }
+QPushButton#version {
+    background: transparent; color: $muted; padding: 0 0 0 4px; text-align: left;
+    font-size: 11px; font-weight: 400;
+}
+QPushButton#version:hover { background: transparent; color: $accent; text-decoration: underline; }
 QPushButton#nav {
     background: transparent; border: none; border-radius: 14px;
     padding: 11px 14px; text-align: left; font-size: 15px; font-weight: 600; color: $side_text;

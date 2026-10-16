@@ -22,6 +22,7 @@ from version import __version__
 
 REPO = "RealOrangeKun/nyanga"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
+CHANGELOG = f"https://github.com/{REPO}/blob/main/CHANGELOG.md"
 _API = f"https://api.github.com/repos/{REPO}/releases/latest"
 _FOLDER = Path(tempfile.gettempdir()) / "nyanga-update"
 
@@ -57,6 +58,11 @@ def latest() -> Release | None:
     if asset is None:
         return None
     return Release(data["tag_name"].lstrip("v"), data.get("body") or "", asset["browser_download_url"], asset["size"])
+
+
+def notes_url(version: str = __version__) -> str:
+    """This version's release notes, or the whole changelog when running a dev build."""
+    return f"https://github.com/{REPO}/releases/tag/v{version}" if any(parse(version)) else CHANGELOG
 
 
 def is_newer(release: Release) -> bool:

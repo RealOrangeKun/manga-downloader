@@ -100,7 +100,8 @@ That's the only time you install it ✧
 
 When a new version is out, a card pops up with **Update now**. It downloads the new version,
 installs it and reopens by itself. Your settings and library are kept (they live in
-`%APPDATA%\Nyanga`).
+`%APPDATA%\Nyanga`). Curious what changed? Click the version at the bottom left for that
+version's notes, or see the whole [changelog](CHANGELOG.md).
 
 Pressed **Later**? A button waits at the top right. While an update downloads with the card
 closed, that spot shows the delivery cat and how far along it is:

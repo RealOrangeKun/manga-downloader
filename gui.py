@@ -1504,7 +1504,11 @@ class MainWindow(QWidget):
         sl.addWidget(self.toggle)
         sl.addSpacing(10)
         sl.addWidget(label("HI LIL GOMIEE!!", "greeting"))
-        sl.addWidget(label(f"version {__version__}", "version"))
+        version = QPushButton(f"version {__version__}", objectName="version")
+        version.setCursor(Qt.PointingHandCursor)
+        version.setToolTip("What's new in this version ✧")
+        version.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(updater.notes_url())))
+        sl.addWidget(version, 0, Qt.AlignLeft)
 
         layout.addWidget(side)
         layout.addWidget(self.stack, 1)
