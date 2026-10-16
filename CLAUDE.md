@@ -51,9 +51,11 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 ## Packaging and releases
 
 - `packaging/manga_dl.spec`: PyInstaller folder build (`dist/MangaDownloader/`), no console, no
-  UPX (UPX causes antivirus false positives). Unused Qt parts (QML, Quick, PDF) are filtered out.
+  UPX (UPX causes antivirus false positives). CI compiles the PyInstaller bootloader from source
+  (`PYINSTALLER_COMPILE_BOOTLOADER=1`) for the same reason; keep it that way. Unused Qt parts (QML, Quick, PDF) are filtered out.
 - `packaging/installer.iss`: Inno Setup, per-user install in `%LOCALAPPDATA%\Programs`, no admin.
-  Never change its `AppId`; updates rely on it.
+  Never change its `AppId`; updates rely on it. Its [Code] adds optional pages that import
+  `settings.json` and `library/` from an old source checkout into `%APPDATA%\Manga Downloader`.
 - `scripts/make_icon.py` draws `build/icon.ico` from the app icon in `theme.py`.
 - The version lives in git tags (`vX.Y.Z`) created by the release; nothing is committed back.
 - `manga_dl.py` must call `multiprocessing.freeze_support()` first, or the exe's worker

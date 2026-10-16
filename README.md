@@ -13,7 +13,10 @@ A small pink desktop app that downloads a manga and saves it as one file per vol
    download **MangaDownloader-Setup-x.y.z.exe**.
 2. Run it. Windows may say "Windows protected your PC" because the app isn't signed: click
    **More info**, then **Run anyway**. No admin rights are needed.
-3. Open **Manga Downloader** from the Start menu.
+3. Used it with Python before? On the **Bring your old settings** page, tick the import and pick
+   the folder that has `manga_dl.py` in it. Its `settings.json` and `library` folder (history
+   and covers) are copied into the installed app.
+4. Open **Manga Downloader** from the Start menu.
 
 That's the only time you install it. When a new version is out, the app shows a card with an
 **Update now** button; it downloads the new version, installs it and reopens by itself. Your
