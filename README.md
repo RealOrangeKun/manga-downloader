@@ -1,17 +1,18 @@
 <p align="center">
-  <img src="assets/readme/icon.png" width="96" alt="The Manga Downloader cat">
+  <img src="assets/readme/icon.png" width="96" alt="The Nyanga cat">
 </p>
 
-<h1 align="center">Manga Downloader</h1>
+<h1 align="center">Nyanga</h1>
 
 <p align="center">
   <b>a cute &amp; cozy pink app that downloads manga for you ✧</b><br>
+  <i>nyan + manga: the cat fetches your chapters</i><br>
   one file per volume: CBZ, PDF, EPUB or plain image folders
 </p>
 
 <p align="center">
-  <a href="https://github.com/RealOrangeKun/manga-downloader/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RealOrangeKun/manga-downloader?style=for-the-badge&color=ff5c9a&label=latest"></a>
-  <a href="https://github.com/RealOrangeKun/manga-downloader/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/RealOrangeKun/manga-downloader/total?style=for-the-badge&color=ff9cc6"></a>
+  <a href="https://github.com/RealOrangeKun/nyanga/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RealOrangeKun/nyanga?style=for-the-badge&color=ff5c9a&label=latest"></a>
+  <a href="https://github.com/RealOrangeKun/nyanga/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/RealOrangeKun/nyanga/total?style=for-the-badge&color=ff9cc6"></a>
   <img alt="Windows" src="https://img.shields.io/badge/windows-installer-ffb3cf?style=for-the-badge">
 </p>
 
@@ -23,7 +24,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/RealOrangeKun/manga-downloader/releases/latest"><b>⬇ Download for Windows</b></a>
+  <a href="https://github.com/RealOrangeKun/nyanga/releases/latest"><b>⬇ Download for Windows</b></a>
   &nbsp;·&nbsp; <a href="#-using-it">How to use it</a>
   &nbsp;·&nbsp; <a href="#-run-from-source">Run from source</a>
 </p>
@@ -84,14 +85,14 @@ so they follow the light and dark theme.
 
 ## 💝 Install (Windows)
 
-1. Open the [latest release](https://github.com/RealOrangeKun/manga-downloader/releases/latest) and
-   download **MangaDownloader-Setup-x.y.z.exe**.
+1. Open the [latest release](https://github.com/RealOrangeKun/nyanga/releases/latest) and
+   download **Nyanga-Setup-x.y.z.exe**.
 2. Run it. Windows may say "Windows protected your PC" because the app isn't signed: click
    **More info**, then **Run anyway**. No admin rights are needed.
 3. Used it with Python before? On the **Bring your old settings** page, tick the import and pick
-   the folder that has `manga_dl.py` in it. Its `settings.json` and `library` folder (history
+   the folder that has `nyanga.py` in it. Its `settings.json` and `library` folder (history
    and covers) are copied into the installed app.
-4. Open **Manga Downloader** from the Start menu.
+4. Open **Nyanga** from the Start menu.
 
 That's the only time you install it ✧
 
@@ -99,7 +100,7 @@ That's the only time you install it ✧
 
 When a new version is out, a card pops up with **Update now**. It downloads the new version,
 installs it and reopens by itself. Your settings and library are kept (they live in
-`%APPDATA%\Manga Downloader`).
+`%APPDATA%\Nyanga`).
 
 Pressed **Later**? A button waits at the top right. While an update downloads with the card
 closed, that spot shows the delivery cat and how far along it is:
@@ -147,8 +148,8 @@ Every manga you've downloaded gets a card with its cover, how much of the series
 - **Delay between requests**: shared by all workers, so more workers never means more
   requests per second. Sites ask for human browsing speed; going too low can get you blocked.
 
-Settings and history are saved in `%APPDATA%\Manga Downloader` in the installed app, or next to
-`manga_dl.py` (`settings.json` and `library/`, both git-ignored) when running from source.
+Settings and history are saved in `%APPDATA%\Nyanga` in the installed app, or next to
+`nyanga.py` (`settings.json` and `library/`, both git-ignored) when running from source.
 
 ## 🛠️ Run from source
 
@@ -159,7 +160,7 @@ Linux / macOS:
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python manga_dl.py
+.venv/bin/python nyanga.py
 ```
 
 Windows (PowerShell):
@@ -167,7 +168,7 @@ Windows (PowerShell):
 ```powershell
 py -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python manga_dl.py
+.venv\Scripts\python nyanga.py
 ```
 
 After the first time, only the last line is needed.
@@ -184,14 +185,14 @@ commit messages since the last release ([conventional commits](https://www.conve
 | `feat!:` or a `BREAKING CHANGE:` line | `feat!: new settings format` | 1.1.0 → 2.0.0 |
 | `docs:`, `chore:`, `ci:`, `refactor:`, `style:`, `test:` | `docs: fix typo` | no release |
 
-If there's a new version, it builds the exe with PyInstaller ([packaging/manga_dl.spec](packaging/manga_dl.spec)),
+If there's a new version, it builds the exe with PyInstaller ([packaging/nyanga.spec](packaging/nyanga.spec)),
 wraps it in an Inno Setup installer ([packaging/installer.iss](packaging/installer.iss)), and publishes a
 GitHub Release tagged `vX.Y.Z` with the installer and notes made from the commits. The tag is
 the source of the version; `version.py` says `0.0.0-dev` in the repo and gets the real number
 during the build.
 
 To build locally on Windows: `pip install pyinstaller`, `python scripts/make_icon.py`,
-`pyinstaller packaging/manga_dl.spec --noconfirm`, then `ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss`.
+`pyinstaller packaging/nyanga.spec --noconfirm`, then `ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss`.
 
 ## 🧶 Notes
 

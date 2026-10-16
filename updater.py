@@ -1,6 +1,6 @@
 """Finds newer releases on GitHub and installs them. Only the installed Windows app updates itself.
 
-Each release carries a MangaDownloader-Setup-<version>.exe. Updating downloads it and runs it
+Each release carries a Nyanga-Setup-<version>.exe. Updating downloads it and runs it
 silently: it closes the app, replaces its files, and opens the new version. No GUI code in here.
 """
 
@@ -20,10 +20,10 @@ import requests
 import paths
 from version import __version__
 
-REPO = "RealOrangeKun/manga-downloader"
+REPO = "RealOrangeKun/nyanga"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 _API = f"https://api.github.com/repos/{REPO}/releases/latest"
-_FOLDER = Path(tempfile.gettempdir()) / "manga-downloader-update"
+_FOLDER = Path(tempfile.gettempdir()) / "nyanga-update"
 
 
 @dataclass
@@ -66,7 +66,7 @@ def is_newer(release: Release) -> bool:
 def download(release: Release, progress: Callable[[int, int], None]) -> Path:
     """Saves the installer to the temp folder, calling progress(done, total) as it goes."""
     _FOLDER.mkdir(parents=True, exist_ok=True)
-    out = _FOLDER / f"MangaDownloader-Setup-{release.version}.exe"
+    out = _FOLDER / f"Nyanga-Setup-{release.version}.exe"
     part = out.with_suffix(".part")
     with requests.get(release.url, stream=True, timeout=30) as resp:
         resp.raise_for_status()

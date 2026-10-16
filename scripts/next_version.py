@@ -86,7 +86,7 @@ def main() -> None:
         for key, heading in SECTIONS:
             if notes[key]:
                 parts.append(f"### {heading}\n" + "".join(f"- {line}\n" for line in notes[key]))
-        parts.append("Download **MangaDownloader-Setup-{0}.exe** below and run it. Already installed? "
+        parts.append("Download **Nyanga-Setup-{0}.exe** below and run it. Already installed? "
                      "The app updates itself.\n".format(version))
         args.notes.write_text("\n".join(parts), encoding="utf-8")
     if args.write_version:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manga downloader: opens the GUI."""
+"""Nyanga, the manga downloader: opens the GUI."""
 
 import multiprocessing
 

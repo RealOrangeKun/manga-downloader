@@ -1440,7 +1440,7 @@ class MainWindow(QWidget):
 
     def __init__(self):
         super().__init__(objectName="root")
-        self.setWindowTitle("Manga Downloader")
+        self.setWindowTitle("Nyanga")
         self.setWindowIcon(theme.app_icon())
         self.resize(1120, 840)
         self.settings = Settings.load()
@@ -1460,7 +1460,7 @@ class MainWindow(QWidget):
         mascot = QLabel()
         mascot.setPixmap(theme.app_pixmap(96).scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand.addWidget(mascot)
-        brand.addWidget(label("Manga\nDownloader", "logo"))
+        brand.addWidget(label("Nyanga", "logo"))
         brand.addStretch(1)
         sl.addLayout(brand)
         sl.addSpacing(4)
@@ -1706,8 +1706,8 @@ class MainWindow(QWidget):
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setApplicationName("manga-downloader")
-    app.setApplicationDisplayName("Manga Downloader")
+    app.setApplicationName("nyanga")
+    app.setApplicationDisplayName("Nyanga")
     app.setFont(theme.load_font())
     app.setWindowIcon(theme.app_icon())
     window = MainWindow()

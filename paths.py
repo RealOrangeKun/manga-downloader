@@ -15,8 +15,8 @@ _HERE = Path(__file__).resolve().parent
 BUNDLE = Path(getattr(sys, "_MEIPASS", _HERE))
 
 # Settings and library. From source they stay next to the script (git-ignored); the installed app
-# can't write to its own folder and an update replaces it, so it uses %APPDATA%\Manga Downloader.
+# can't write to its own folder and an update replaces it, so it uses %APPDATA%\Nyanga.
 if FROZEN:
-    DATA = Path(os.environ.get("APPDATA") or Path.home() / ".config") / "Manga Downloader"
+    DATA = Path(os.environ.get("APPDATA") or Path.home() / ".config") / "Nyanga"
 else:
     DATA = _HERE

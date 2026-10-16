@@ -48,7 +48,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           python scripts/make_icon.py
-          pyinstaller packaging/manga_dl.spec --noconfirm
+          pyinstaller packaging/nyanga.spec --noconfirm
 
       - name: Build the installer
         if: steps.version.outputs.release == 'true'
@@ -63,7 +63,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create v${{ steps.version.outputs.version }}
-          dist/installer/MangaDownloader-Setup-${{ steps.version.outputs.version }}.exe
+          dist/installer/Nyanga-Setup-${{ steps.version.outputs.version }}.exe
           --title "v${{ steps.version.outputs.version }}"
           --notes-file notes.md
           --target ${{ github.sha }}

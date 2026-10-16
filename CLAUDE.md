@@ -18,7 +18,7 @@
 
 ## What this is
 
-A PySide6 desktop app (pink theme, cat animations) that downloads manga and saves it as one
+Nyanga (nyan + manga): a PySide6 desktop app (pink theme, cat animations) that downloads manga and saves it as one
 file per volume or per N chapters: CBZ, PDF, EPUB or image folders. Only site so far:
 fanfox.net (plain HTTP, no headless browser).
 
@@ -27,7 +27,7 @@ fanfox.net (plain HTTP, no headless browser).
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python manga_dl.py
+.venv/bin/python nyanga.py
 ```
 
 Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tests.
@@ -36,10 +36,10 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 
 | File | Role |
 |------|------|
-| `manga_dl.py` | Entry point, just launches `gui.main()` |
+| `nyanga.py` | Entry point, just launches `gui.main()` |
 | `core.py` | Site scrapers (`FanFox`, registered in `SITES`), chapter grouping, rate limiting, the parallel download pipeline (threads or processes). **No GUI imports.** |
 | `builders.py` | Output formats (`FORMATS`, `build_file`), webtoon strip slicing for EPUB. **No GUI imports** so it runs in worker processes. |
-| `paths.py` | `BUNDLE` (assets, also inside the exe) and `DATA` (settings/library: next to the script from source, `%APPDATA%\Manga Downloader` in the exe). Use these, never `__file__`, for file locations. |
+| `paths.py` | `BUNDLE` (assets, also inside the exe) and `DATA` (settings/library: next to the script from source, `%APPDATA%\Nyanga` in the exe). Use these, never `__file__`, for file locations. |
 | `updater.py` | Checks GitHub's latest release, downloads the installer, runs it silently with `/update=1`. Only active in the frozen Windows build. |
 | `version.py` | `__version__`; stays `0.0.0-dev` in the repo, CI writes the real one. Don't bump it by hand. |
 | `history.py` | Per-chapter download history in `library/history.json`, covers in `library/covers/` |
@@ -50,15 +50,15 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 
 ## Packaging and releases
 
-- `packaging/manga_dl.spec`: PyInstaller folder build (`dist/MangaDownloader/`), no console, no
+- `packaging/nyanga.spec`: PyInstaller folder build (`dist/Nyanga/`), no console, no
   UPX (UPX causes antivirus false positives). CI compiles the PyInstaller bootloader from source
   (`PYINSTALLER_COMPILE_BOOTLOADER=1`) for the same reason; keep it that way. Unused Qt parts (QML, Quick, PDF) are filtered out.
 - `packaging/installer.iss`: Inno Setup, per-user install in `%LOCALAPPDATA%\Programs`, no admin.
   Never change its `AppId`; updates rely on it. Its [Code] adds optional pages that import
-  `settings.json` and `library/` from an old source checkout into `%APPDATA%\Manga Downloader`.
+  `settings.json` and `library/` from an old source checkout into `%APPDATA%\Nyanga`.
 - `scripts/make_icon.py` draws `build/icon.ico` from the app icon in `theme.py`.
 - The version lives in git tags (`vX.Y.Z`) created by the release; nothing is committed back.
-- `manga_dl.py` must call `multiprocessing.freeze_support()` first, or the exe's worker
+- `nyanga.py` must call `multiprocessing.freeze_support()` first, or the exe's worker
   processes open new windows.
 
 ## Conventions

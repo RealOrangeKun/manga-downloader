@@ -1,5 +1,5 @@
-; Inno Setup installer for the PyInstaller build in dist/MangaDownloader.
-; Build: ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss -> dist\installer\MangaDownloader-Setup-1.2.3.exe
+; Inno Setup installer for the PyInstaller build in dist/Nyanga.
+; Build: ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss -> dist\installer\Nyanga-Setup-1.2.3.exe
 ;
 ; Installs per user (no admin prompt), so the app can update itself silently: it runs this with
 ; /VERYSILENT /update=1, which closes the app, replaces its files and opens the new version.
@@ -11,22 +11,22 @@
 [Setup]
 ; Never change the AppId: it's how an update finds the installed app.
 AppId={{36C7F768-8CCD-453C-A53E-24898AD4D191}
-AppName=Manga Downloader
+AppName=Nyanga
 AppVersion={#AppVersion}
-AppVerName=Manga Downloader {#AppVersion}
+AppVerName=Nyanga {#AppVersion}
 AppPublisher=Youssef Tarek
-AppPublisherURL=https://github.com/RealOrangeKun/manga-downloader
-AppUpdatesURL=https://github.com/RealOrangeKun/manga-downloader/releases
-DefaultDirName={localappdata}\Programs\Manga Downloader
-DefaultGroupName=Manga Downloader
+AppPublisherURL=https://github.com/RealOrangeKun/nyanga
+AppUpdatesURL=https://github.com/RealOrangeKun/nyanga/releases
+DefaultDirName={localappdata}\Programs\Nyanga
+DefaultGroupName=Nyanga
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist\installer
-OutputBaseFilename=MangaDownloader-Setup-{#AppVersion}
+OutputBaseFilename=Nyanga-Setup-{#AppVersion}
 SetupIconFile=..\build\icon.ico
-UninstallDisplayIcon={app}\MangaDownloader.exe
+UninstallDisplayIcon={app}\Nyanga.exe
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -41,16 +41,16 @@ Name: desktopicon; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm
 Type: filesandordirs; Name: "{app}\_internal"
 
 [Files]
-Source: "..\dist\MangaDownloader\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Nyanga\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Manga Downloader"; Filename: "{app}\MangaDownloader.exe"
-Name: "{autodesktop}\Manga Downloader"; Filename: "{app}\MangaDownloader.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Nyanga"; Filename: "{app}\Nyanga.exe"
+Name: "{autodesktop}\Nyanga"; Filename: "{app}\Nyanga.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\MangaDownloader.exe"; Description: "{cm:LaunchProgram,Manga Downloader}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Nyanga.exe"; Description: "{cm:LaunchProgram,Nyanga}"; Flags: nowait postinstall skipifsilent
 ; After a self-update the installer runs silently, so open the app again here.
-Filename: "{app}\MangaDownloader.exe"; Flags: nowait; Check: IsUpdate
+Filename: "{app}\Nyanga.exe"; Flags: nowait; Check: IsUpdate
 
 [Code]
 var
@@ -65,7 +65,7 @@ end;
 { Where the installed app keeps its settings and library (paths.DATA in the app). }
 function DataDir: String;
 begin
-  Result := ExpandConstant('{userappdata}\Manga Downloader');
+  Result := ExpandConstant('{userappdata}\Nyanga');
 end;
 
 function OldFolder: String;
@@ -77,12 +77,12 @@ end;
 procedure InitializeWizard;
 begin
   ImportPage := CreateInputOptionPage(wpSelectTasks,
-    'Bring your old settings', 'Did you use Manga Downloader with Python before?',
-    'If you ran manga_dl.py before, your settings and library (download history and covers) can come along.',
+    'Bring your old settings', 'Did you use Nyanga with Python before?',
+    'If you ran nyanga.py before, your settings and library (download history and covers) can come along.',
     False, False);
   ImportPage.Add('Yes, import them from my old copy');
   FolderPage := CreateInputDirPage(ImportPage.ID,
-    'Where is the old copy?', 'Pick the folder that has manga_dl.py in it',
+    'Where is the old copy?', 'Pick the folder that has nyanga.py in it',
     'Its settings.json and library folder are copied over and replace any the app already has. ' +
     'The old folder isn''t changed.',
     False, '');
@@ -100,7 +100,7 @@ begin
   if (CurPageID = FolderPage.ID) and not FileExists(OldFolder + '\settings.json')
      and not FileExists(OldFolder + '\library\history.json') then
   begin
-    MsgBox('There''s no settings.json or library folder in there. Pick the folder with manga_dl.py ' +
+    MsgBox('There''s no settings.json or library folder in there. Pick the folder with nyanga.py ' +
            'in it, or go back and untick the import.', mbError, MB_OK);
     Result := False;
   end;

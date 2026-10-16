@@ -1,5 +1,5 @@
-# PyInstaller build of the app as a folder: dist/MangaDownloader/MangaDownloader.exe
-# Run from the project folder: pyinstaller packaging/manga_dl.spec --noconfirm
+# PyInstaller build of the app as a folder: dist/Nyanga/Nyanga.exe
+# Run from the project folder: pyinstaller packaging/nyanga.spec --noconfirm
 # (after python scripts/make_icon.py, for the icon)
 
 from pathlib import Path
@@ -8,7 +8,7 @@ ROOT = Path(SPECPATH).parent
 ICON = ROOT / "build" / "icon.ico"
 
 a = Analysis(
-    [str(ROOT / "manga_dl.py")],
+    [str(ROOT / "nyanga.py")],
     pathex=[str(ROOT)],
     datas=[(str(ROOT / "assets" / d), f"assets/{d}") for d in ("fonts", "icons")],  # not the README pictures
     excludes=["tkinter"],
@@ -23,9 +23,9 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="MangaDownloader",
+    name="Nyanga",
     console=False,
     icon=str(ICON) if ICON.exists() else None,
     upx=False,
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="MangaDownloader", upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, name="Nyanga", upx=False)
