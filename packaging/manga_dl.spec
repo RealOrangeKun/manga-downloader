@@ -10,7 +10,7 @@ ICON = ROOT / "build" / "icon.ico"
 a = Analysis(
     [str(ROOT / "manga_dl.py")],
     pathex=[str(ROOT)],
-    datas=[(str(ROOT / "assets"), "assets")],
+    datas=[(str(ROOT / "assets" / d), f"assets/{d}") for d in ("fonts", "icons")],  # not the README pictures
     excludes=["tkinter"],
 )
 # Qt plugins drag in QML, Quick, the virtual keyboard and PDF; the app uses none of them.

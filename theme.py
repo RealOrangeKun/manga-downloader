@@ -246,17 +246,21 @@ _ICONS = {
             '<circle cx="5" cy="17" r="1.4" fill="COLOR"/>',
 }
 
-# The app's own little mascot: a smiling open book with a heart. Drawn for this app.
+# The app's mascot: a happy cat face (the same cat as in loader.py) with a heart. Drawn for this app.
 _APP_ICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0" stop-color="#ff9cc6"/><stop offset="1" stop-color="#ff5c9a"/></linearGradient></defs>
 <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#g)"/>
-<path d="M12 21c6-2.5 12-2 20 2.5V50c-8-4.5-14-5-20-2.5z" fill="#fff"/>
-<path d="M52 21c-6-2.5-12-2-20 2.5V50c8-4.5 14-5 20-2.5z" fill="#ffe8f2"/>
-<circle cx="21" cy="33" r="1.9" fill="#5a2a41"/><circle cx="43" cy="33" r="1.9" fill="#5a2a41"/>
-<path d="M28.5 37.5q3.5 3 7 0" fill="none" stroke="#5a2a41" stroke-width="1.8" stroke-linecap="round"/>
-<ellipse cx="17.5" cy="38" rx="2.6" ry="1.5" fill="#ffb3d0"/><ellipse cx="46.5" cy="38" rx="2.6" ry="1.5" fill="#ffb3d0"/>
-<path d="M32 16.5s-4.6-2.7-4.6-5.7c0-1.6 1.2-2.7 2.6-2.7 1 0 1.6.5 2 1.2.4-.7 1-1.2 2-1.2 1.4 0 2.6 1.1 2.6 2.7 0 3-4.6 5.7-4.6 5.7z" fill="#fff"/>
+<g fill="#fff6ee" stroke="#7a4a5f" stroke-width="1.8" stroke-linejoin="round">
+<path d="M12.5 33 14.5 9.5 29 22z"/><path d="M51.5 33 49.5 9.5 35 22z"/>
+<ellipse cx="32" cy="37.5" rx="21.5" ry="17"/></g>
+<path d="M17.2 26.5 18 15.5 24.6 21.6z" fill="#ffc2d9"/><path d="M46.8 26.5 46 15.5 39.4 21.6z" fill="#ffc2d9"/>
+<g fill="none" stroke="#7a4a5f" stroke-width="2.6" stroke-linecap="round">
+<path d="M19.5 37.5q4.5-5.5 9 0"/><path d="M35.5 37.5q4.5-5.5 9 0"/>
+<path d="M28 46q2 2.2 4 0q2 2.2 4 0" stroke-width="1.8"/></g>
+<ellipse cx="17.5" cy="43.5" rx="3.6" ry="2.1" fill="#ffb3cf"/><ellipse cx="46.5" cy="43.5" rx="3.6" ry="2.1" fill="#ffb3cf"/>
+<path d="M32 45s-3.4-2-3.4-4.1c0-1.1.9-1.9 1.9-1.9.7 0 1.2.4 1.5.9.3-.5.8-.9 1.5-.9 1 0 1.9.8 1.9 1.9 0 2.1-3.4 4.1-3.4 4.1z" fill="#ff6fa6"/>
+<path d="M51 7.5s-2.6-1.5-2.6-3.2c0-.9.7-1.5 1.5-1.5.5 0 .9.3 1.1.7.2-.4.6-.7 1.1-.7.8 0 1.5.6 1.5 1.5 0 1.7-2.6 3.2-2.6 3.2z" fill="#fff" transform="translate(-19 5)"/>
 </svg>"""
 
 
