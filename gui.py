@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 import requests
-from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
@@ -1226,7 +1226,7 @@ class Notification(QWidget):
         self.setGraphicsEffect(self.fade)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(18, 18, 18, 18)  # room for the shadow
-        box = QFrame(objectName="notify")
+        self.box = box = QFrame(objectName="notify")
         shadow = QGraphicsDropShadowEffect(blurRadius=34, xOffset=0, yOffset=8)
         shadow.setColor(QColor(255, 92, 154, 70))
         box.setGraphicsEffect(shadow)
@@ -1250,6 +1250,7 @@ class Notification(QWidget):
         col.addLayout(head)
         self.body = label("", "notifyBody", wrap=True)
         self.body.setOpenExternalLinks(True)
+        self.body.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # spare height (the cat is taller) goes below
         col.addWidget(self.body)
         buttons = QHBoxLayout()
         buttons.addStretch(1)
@@ -1264,6 +1265,7 @@ class Notification(QWidget):
         buttons.addWidget(self.update_btn)
         col.addSpacing(4)
         col.addLayout(buttons)
+        col.addStretch(1)
         row.addLayout(col, 1)
 
         self.setFixedWidth(460)
@@ -1295,16 +1297,14 @@ class Notification(QWidget):
         if self.sticky:
             self.later_btn.setVisible(not busy)
             self.update_btn.setVisible(not busy)
-        self.adjustSize()
-        self.reposition()
+        self._fit()
 
     def show_update(self) -> None:
         """Brings the update card back as it was, e.g. with the progress of a running update."""
         self._show(self.title.text() if self.sticky else "A new version is out!", None, update=True)
         self.later_btn.setVisible(not self.busy)
         self.update_btn.setVisible(not self.busy)
-        self.adjustSize()
-        self.reposition()
+        self._fit()
 
     def _show(self, title: str, body: str | None, update: bool) -> None:
         self.sticky = update
@@ -1316,14 +1316,27 @@ class Notification(QWidget):
         self.open_btn.setVisible(not update)
         self.later_btn.setVisible(update)
         self.update_btn.setVisible(update)
-        self.adjustSize()
-        self.reposition()
         was_visible = self.isVisible() and self.anim.endValue() == 1
+        if not was_visible:
+            self.fade.setOpacity(0.0)
         self.show()
+        self._fit()  # after show(): a hidden card's label has no real width to wrap at
         self.raise_()
         self.cat.start()
         if not was_visible:
             self._fade(1.0)
+
+    def _fit(self) -> None:
+        """Exactly as tall as the wrapped text; Qt guesses a wrapped label's height at the wrong width."""
+        self.body.setMinimumHeight(0)
+        self.body.setMaximumHeight(16777215)
+        QCoreApplication.sendPostedEvents(None, QEvent.LayoutRequest)  # buttons just shown or hidden
+        self.adjustSize()
+        self.layout().activate()  # gives the body label its real width
+        self.body.setFixedHeight(self.body.heightForWidth(self.body.width()))
+        QCoreApplication.sendPostedEvents(None, QEvent.LayoutRequest)
+        self.resize(self.width(), self.sizeHint().height())
+        self.reposition()
 
     def dismiss(self) -> None:
         self.timer.stop()
