@@ -45,8 +45,8 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 | `history.py` | Per-chapter download history in `library/history.json`, covers in `library/covers/` |
 | `gui.py` | `DownloadPage`, `SettingsPage`, `LibraryPage`, `Notification`, `MainWindow`, `Settings` dataclass (saved to `settings.json`) |
 | `theme.py` | Light/dark palettes, stylesheet template, bundled Fredoka font, SVG icons |
-| `loader.py` | Hand-painted cat loading animations (`CatLoader`, `MiniCat`) |
-| `assets/` | Fonts (OFL) and icon SVGs |
+| `loader.py` | Hand-painted cats, our mascot: `CatLoader` (reading / celebrating), `MiniCat` with `paint_mini_cat` (fetching) or `paint_update_cat` (updates). The app icon in `theme.py` is the same cat. |
+| `assets/` | Fonts (OFL) and icon SVGs, bundled into the exe. `assets/readme/` holds README GIFs/screenshots rendered from the app (not bundled); re-render them when the cats or UI change. |
 
 ## Packaging and releases
 
