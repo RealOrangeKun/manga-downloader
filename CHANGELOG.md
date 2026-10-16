@@ -2,6 +2,11 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/RealOrangeKun/nyanga/releases) with its installer.
 
+## [1.1.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.1.0) (2026-10-16)
+
+### New
+- click the version to see what's new
+
 ## [1.0.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.0.0) (2026-10-16)
 
 ### New
