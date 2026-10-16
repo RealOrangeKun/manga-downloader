@@ -110,6 +110,15 @@ QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selec
 }
 QFrame#toast { background: $chip; border-radius: 13px; }
 QFrame#notify { background: $card; border: 2px solid $border; border-radius: 22px; }
+QFrame#updatePill {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary_a, stop:1 $primary_b);
+    border-radius: 21px;
+}
+QFrame#updatePill:hover { background: $primary_hover; }
+QFrame#updatePill[busy="true"] { background: $card; border: 2px solid $border; }
+QFrame#updatePill[busy="true"]:hover { background: $button_hover; }
+QLabel#updatePillText { color: white; font-size: 14px; font-weight: 700; background: transparent; }
+QFrame#updatePill[busy="true"] QLabel#updatePillText { color: $accent; }
 QLabel#libTitle { font-size: 17px; font-weight: 700; }
 QLabel#newBadge {
     background: $primary_b; color: white; border-radius: 9px; padding: 2px 9px; font-size: 11px; font-weight: 700;

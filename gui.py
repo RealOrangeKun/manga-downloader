@@ -26,7 +26,7 @@ import paths
 import theme
 import updater
 from history import History, ago, chapter_key
-from loader import CatLoader, MiniCat, paint_mini_cat
+from loader import CatLoader, MiniCat, paint_mini_cat, paint_update_cat
 from builders import FORMATS
 from version import __version__
 
@@ -1042,7 +1042,7 @@ class LibraryPage(QWidget):
         scroll.setWidget(body)
         outer.addWidget(scroll)
 
-        head = QHBoxLayout()
+        self.head = head = QHBoxLayout()
         head.addWidget(label("Library ✧", "h1"))
         head.addStretch(1)
         self.check_cat = MiniCat(lambda: CURRENT["mode"])
@@ -1069,6 +1069,10 @@ class LibraryPage(QWidget):
         self.list.setSpacing(16)
         self.col.addLayout(self.list)
         self.col.addStretch(1)
+
+    def reserve_right(self, px: int) -> None:
+        """Keeps the header clear of the update pill that floats over the top right."""
+        self.head.setContentsMargins(0, 0, px, 0)
 
     def refresh(self) -> None:
         """Rebuild the cards from history, then look for new chapters in the background."""
@@ -1211,11 +1215,13 @@ class LibraryPage(QWidget):
 class Notification(QWidget):
     """A card that fades in at the bottom right with a happy cat: a download is finished, or an update is out."""
     update_requested = Signal()
+    dismissed = Signal()
 
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.folder = ""
         self.sticky = False
+        self.showing_update = False  # the update card is up (or fading in)
         self.fade = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.fade)
         outer = QVBoxLayout(self)
@@ -1283,19 +1289,33 @@ class Notification(QWidget):
         self.timer.stop()
 
     def update_status(self, text: str, busy: bool = True) -> None:
+        """Works while the card is closed too, so it's right when it comes back."""
         self.body.setText(text)
-        self.update_btn.setEnabled(not busy)
-        self.later_btn.setEnabled(not busy)
+        self.busy = busy
+        if self.sticky:
+            self.later_btn.setVisible(not busy)
+            self.update_btn.setVisible(not busy)
+        self.adjustSize()
+        self.reposition()
 
-    def _show(self, title: str, body: str, update: bool) -> None:
+    def show_update(self) -> None:
+        """Brings the update card back as it was, e.g. with the progress of a running update."""
+        self._show(self.title.text() if self.sticky else "A new version is out!", None, update=True)
+        self.later_btn.setVisible(not self.busy)
+        self.update_btn.setVisible(not self.busy)
+        self.adjustSize()
+        self.reposition()
+
+    def _show(self, title: str, body: str | None, update: bool) -> None:
         self.sticky = update
+        self.showing_update = update
+        self.busy = False if body is not None else getattr(self, "busy", False)
         self.title.setText(title)
-        self.body.setText(body)
+        if body is not None:
+            self.body.setText(body)
         self.open_btn.setVisible(not update)
         self.later_btn.setVisible(update)
         self.update_btn.setVisible(update)
-        self.update_btn.setEnabled(True)
-        self.later_btn.setEnabled(True)
         self.adjustSize()
         self.reposition()
         was_visible = self.isVisible() and self.anim.endValue() == 1
@@ -1307,7 +1327,9 @@ class Notification(QWidget):
 
     def dismiss(self) -> None:
         self.timer.stop()
+        self.showing_update = False
         self._fade(0.0)
+        self.dismissed.emit()
 
     def _fade(self, to: float) -> None:
         self.anim.stop()
@@ -1339,6 +1361,57 @@ class Notification(QWidget):
         if self.isVisible() and not self.sticky:
             self.timer.start(4000)
         super().leaveEvent(event)
+
+
+class UpdatePill(QFrame):
+    """Top right: an update that was put off (press to update), or one on its way while its card is closed."""
+    clicked = Signal()
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent, objectName="updatePill")
+        self.setAttribute(Qt.WA_Hover)
+        self.setCursor(Qt.PointingHandCursor)
+        shadow = QGraphicsDropShadowEffect(blurRadius=22, xOffset=0, yOffset=4)
+        shadow.setColor(QColor(255, 92, 154, 70))
+        self.setGraphicsEffect(shadow)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(12, 2, 18, 2)
+        row.setSpacing(6)
+        self.icon = QLabel()
+        row.addWidget(self.icon)
+        self.cat = MiniCat(lambda: CURRENT["mode"], (40, 34), painter=paint_update_cat)
+        row.addWidget(self.cat)
+        self.text = label("", "updatePillText")
+        row.addWidget(self.text)
+        self.setFixedHeight(42)
+        self.busy = False
+        self.widest = ""
+        self.hide()
+
+    def set_state(self, text: str, busy: bool, widest: str = "") -> None:
+        """`widest` is the longest text this state will show, so the pill doesn't wobble as numbers grow."""
+        self.busy = busy
+        self.widest = widest
+        self.setProperty("busy", busy)
+        repolish(self)
+        repolish(self.text)
+        self.text.setText(text)
+        self.text.setMinimumWidth(self.text.fontMetrics().horizontalAdvance(widest) if widest else 0)
+        self.icon.setVisible(not busy)
+        if busy:
+            self.cat.start()
+        else:
+            self.cat.stop()
+        self.refresh_icon()
+        self.adjustSize()
+
+    def refresh_icon(self) -> None:
+        self.icon.setPixmap(theme.icon("download", QColor("#ffffff")).pixmap(18, 18))
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class UpdateBridge(QObject):
@@ -1429,6 +1502,11 @@ class MainWindow(QWidget):
         # Look for a new version a moment after opening, then every few hours.
         self.release: updater.Release | None = None
         self.offered = ""
+        self.update_state = ""  # "", "available", "updating" or "failed"
+        self.pill = UpdatePill(self)
+        self.pill.clicked.connect(self._pill_clicked)
+        self.notification.dismissed.connect(self._sync_pill)
+        self.download.completed.connect(lambda *_: self._sync_pill())
         self.updates = UpdateBridge()
         self.updates.found.connect(self._update_found)
         self.updates.progress.connect(self._update_progress)
@@ -1463,6 +1541,9 @@ class MainWindow(QWidget):
         for frame in self.findChildren(QFrame, "card"):
             if frame.graphicsEffect():
                 frame.graphicsEffect().setColor(theme.color(mode, "shadow"))
+        if hasattr(self, "pill"):
+            self.pill.set_state(self.pill.text.text(), self.pill.busy, self.pill.widest)  # re-measure in the new style
+            self._place_pill()
         dark = mode == theme.DARK
         self.toggle.setText("  Light mode" if dark else "  Dark mode")
         self.toggle.setIcon(theme.icon("sun" if dark else "moon", theme.color(mode, "side_text")))
@@ -1507,15 +1588,55 @@ class MainWindow(QWidget):
         threading.Thread(target=work, daemon=True).start()
 
     def _update_found(self, release: updater.Release) -> None:
+        if self.update_state in ("updating", "ready"):
+            return
         self.release = release
+        self._set_update_state("available", f"Update to {release.version} · {fmt_size(release.size)}")
         if release.version != self.offered:  # don't nag again about one that was put off
             self.offered = release.version
             self.notification.offer_update(release.version)
+        self._sync_pill()
+
+    def _set_update_state(self, state: str, pill_text: str) -> None:
+        self.update_state = state
+        self.pill.set_state(pill_text, busy=state == "updating")
+        self._sync_pill()
+
+    def _sync_pill(self) -> None:
+        """The pill stands in for the update card whenever the card isn't up."""
+        show = bool(self.update_state) and not self.notification.showing_update
+        self.pill.setVisible(show)
+        if show:
+            self.pill.raise_()
+            self._place_pill()
+        self.library.reserve_right(self.pill.width() + 12 if show else 0)
+
+    def _place_pill(self) -> None:
+        self.pill.adjustSize()
+        self.pill.move(self.width() - self.pill.width() - 30, 24)
+
+    def _pill_clicked(self) -> None:
+        if self.update_state == "updating":
+            self.notification.show_update()
+            self._sync_pill()
+        elif self.update_state == "ready":
+            if self.download.running:
+                self.notification.show_update()
+                self._sync_pill()
+            else:
+                self._update_ready(self.installer)
+        else:
+            self._start_update()
 
     def _start_update(self) -> None:
-        if self.download.running:
-            self.notification.update_status("A download is still going. Update once it's finished ✧", busy=False)
+        if self.update_state == "updating" or self.release is None:
             return
+        if self.download.running:
+            self.notification.show_update()
+            self.notification.update_status("A download is still going. Update once it's finished ✧", busy=False)
+            self._sync_pill()
+            return
+        self._set_update_state("updating", "Updating…")
         self.notification.update_status("Getting the update…")
         release = self.release
 
@@ -1528,19 +1649,31 @@ class MainWindow(QWidget):
         threading.Thread(target=work, daemon=True).start()
 
     def _update_progress(self, done: int, total: int) -> None:
-        self.notification.update_status(f"Getting the update… {done * 100 // max(total, 1)}% "
-                                        f"({fmt_size(done)} of {fmt_size(total)})")
+        percent = done * 100 // max(total, 1)
+        self.notification.update_status(f"Getting the update… {percent}% ({fmt_size(done)} of {fmt_size(total)})")
+        self.pill.set_state(f"Updating… {percent}% · {fmt_size(done)} of {fmt_size(total)}", busy=True,
+                            widest=f"Updating… 100% · {fmt_size(total)} of {fmt_size(total)}")
+        self._place_pill()
 
     def _update_ready(self, installer: Path) -> None:
+        if self.download.running:  # don't close the app under a download; install when they're ready
+            self.installer = installer
+            self._set_update_state("ready", "Install update")
+            self.notification.update_status("The update is ready! Press Install update at the top right "
+                                            "once your download is done ✧", busy=False)
+            return
         try:
             updater.install(installer)
         except OSError as e:
             self._update_failed(str(e))
             return
         self.notification.update_status("Installing! The app reopens by itself in a few seconds ✧")
+        self.pill.set_state("Installing…", busy=True)
+        self._place_pill()
         QTimer.singleShot(800, QApplication.instance().quit)
 
     def _update_failed(self, message: str) -> None:
+        self._set_update_state("failed", "Update didn't work · try again")
         self.notification.update_status(
             f"The update didn't work ({html.escape(message)}). Try again, or get it from "
             f'<a href="{updater.RELEASES_PAGE}">GitHub</a>.', busy=False)
@@ -1549,6 +1682,8 @@ class MainWindow(QWidget):
         super().resizeEvent(event)
         if hasattr(self, "notification"):
             self.notification.reposition()
+        if hasattr(self, "pill"):
+            self._place_pill()
 
     def closeEvent(self, event) -> None:
         # Let running workers stop after their current page instead of leaving half-written files.

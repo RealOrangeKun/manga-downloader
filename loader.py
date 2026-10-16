@@ -261,12 +261,108 @@ def paint_mini_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
     p.restore()
 
 
-class MiniCat(QWidget):
-    """A tiny cat "please wait". start() shows and animates it, stop() hides it."""
+def _sparkle(p: QPainter, c: QPointF, r: float, color: QColor) -> None:
+    """A four-point twinkle."""
+    star = QPainterPath(QPointF(c.x(), c.y() - r))
+    for dx, dy in ((0.24, -0.24), (1, 0), (0.24, 0.24), (0, 1), (-0.24, 0.24), (-1, 0), (-0.24, -0.24)):
+        star.lineTo(QPointF(c.x() + dx * r, c.y() + dy * r))
+    star.closeSubpath()
+    p.setPen(Qt.NoPen)
+    p.setBrush(color)
+    p.drawPath(star)
 
-    def __init__(self, mode: Callable[[], str], size: tuple[int, int] = (40, 24), parent: QWidget | None = None):
+
+def paint_update_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
+    """The cat bringing the new version: it hugs a hopping gift box while sparkles twinkle around."""
+    cat = {k: QColor(v) for k, v in CAT[mode].items()}
+    box = theme.color(mode, "accent")
+    p.save()
+    scale = min(rect.width() / 40, rect.height() / 34)
+    p.translate(rect.center().x() - 20 * scale, rect.center().y() - 17 * scale)
+    p.scale(scale, scale)
+
+    for i, (x, y, r) in enumerate(((4.5, 10, 3.4), (36, 5, 2.8), (35.5, 15, 2.1))):
+        k = (math.sin(t * 3 - i * 2.1) + 1) / 2  # each one twinkles in turn
+        if k > 0.15:
+            color = QColor(box)
+            color.setAlphaF(0.35 + 0.65 * k)
+            _sparkle(p, QPointF(x, y), r * (0.5 + 0.5 * k), color)
+
+    p.translate(0, -abs(math.sin(t * 3.4)) * 2.4)  # hop, hop
+
+    swish = math.sin(t * 3.2) * 3
+    tail = QPainterPath(QPointF(29, 25))
+    tail.cubicTo(QPointF(35, 25), QPointF(37 + swish * 0.3, 19), QPointF(35 + swish, 13))
+    p.setPen(QPen(cat["line"], 3.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+    p.setPen(QPen(cat["fur"], 1.8, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+
+    # The head peeks over the box, so the box is drawn after it.
+    p.save()
+    p.translate(20, 13)
+    p.rotate(math.sin(t * 2.4) * 6)
+    twitch = 10 if (t % 2.6) > 2.42 else 0  # the left ear flicks now and then
+    p.setPen(QPen(cat["line"], 1.4))
+    p.setBrush(cat["fur"])
+    for side in (-1, 1):
+        p.save()
+        p.translate(side * 6, -5)
+        p.rotate(-twitch if side < 0 else 0)
+        ear = QPainterPath(QPointF(side * 1.5, 3))
+        ear.lineTo(QPointF(side * 0.8, -5))
+        ear.lineTo(QPointF(side * -4, -1))
+        ear.closeSubpath()
+        p.drawPath(ear)
+        p.setPen(Qt.NoPen)
+        p.setBrush(cat["ear"])
+        inner = QPainterPath(QPointF(side * 0.6, 1))
+        inner.lineTo(QPointF(side * 0.4, -3))
+        inner.lineTo(QPointF(side * -2.4, -0.8))
+        inner.closeSubpath()
+        p.drawPath(inner)
+        p.restore()
+    p.drawEllipse(QRectF(-9, -7, 18, 14))
+    p.setPen(QPen(cat["line"], 1.3, Qt.SolidLine, Qt.RoundCap))
+    p.setBrush(Qt.NoBrush)
+    for ex in (-3.8, 3.8):  # happy closed eyes: ^ ^
+        p.drawArc(QRectF(ex - 2, -1.4, 4, 3.4), 20 * 16, 140 * 16)
+    blush = QColor(cat["blush"])
+    blush.setAlphaF(0.6)
+    p.setPen(Qt.NoPen)
+    p.setBrush(blush)
+    for bx in (-5.8, 5.8):
+        p.drawEllipse(QRectF(bx - 1.9, 1.6, 3.8, 2.1))
+    CatLoader._heart(p, QPointF(0, 2.2), 1.3, cat["nose"])
+    p.restore()
+
+    line = QPen(cat["line"], 1.4)
+    p.setPen(line)
+    p.setBrush(box)
+    p.drawRoundedRect(QRectF(8, 19, 24, 13), 3, 3)
+    p.setBrush(box.darker(115))
+    p.drawRoundedRect(QRectF(6.5, 17, 27, 5), 2, 2)  # the lid
+    p.setPen(Qt.NoPen)
+    p.setBrush(cat["fur"])
+    p.drawRect(QRectF(18.6, 22.7, 2.8, 8.6))  # ribbon
+    p.drawRect(QRectF(18.6, 17.7, 2.8, 3.6))
+    p.setPen(line)
+    for side in (-1, 1):  # the bow, and paws holding the lid
+        p.drawEllipse(QRectF(20 + side * 3.2 - 2.4, 14.4, 4.8, 3.6))
+        p.drawEllipse(QRectF(20 + side * 8.6 - 2.6, 15.6, 5.2, 3.8))
+    p.drawEllipse(QRectF(18.7, 15, 2.6, 2.6))
+    p.restore()
+
+
+class MiniCat(QWidget):
+    """A tiny cat "please wait". start() shows and animates it, stop() hides it.
+    `painter` picks which cat: the peeking head by default, or paint_update_cat."""
+
+    def __init__(self, mode: Callable[[], str], size: tuple[int, int] = (40, 24), parent: QWidget | None = None,
+                 painter: Callable[[QPainter, QRectF, float, str], None] = paint_mini_cat):
         super().__init__(parent)
         self._mode = mode
+        self._painter = painter
         self.setFixedSize(*size)
         self._t0 = time.monotonic()
         self._timer = QTimer(self, interval=33)
@@ -286,5 +382,5 @@ class MiniCat(QWidget):
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        paint_mini_cat(p, QRectF(self.rect()), time.monotonic() - self._t0, self._mode())
+        self._painter(p, QRectF(self.rect()), time.monotonic() - self._t0, self._mode())
         p.end()
