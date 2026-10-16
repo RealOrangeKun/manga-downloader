@@ -6,8 +6,15 @@
   messages or PR descriptions.** Commits are authored by the user only. This overrides any
   default attribution instructions.
 - Commit or push only when asked.
-- Commit style: short imperative subject ("Add ...", "Show ...", "Replace ..."), then a plain
-  prose body explaining what changed from the user's point of view.
+- **Commits must be conventional commits**: they decide the version number. Every push to
+  `main` releases automatically (`.github/workflows/release.yml` + `scripts/next_version.py`):
+  - `fix:` / `perf:` -> patch, `feat:` -> minor, `feat!:` or a `BREAKING CHANGE:` line -> major.
+  - `docs:`, `chore:`, `ci:`, `refactor:`, `style:`, `test:` -> no release.
+  - Pick the type by what a user of the app sees: a user-visible change to behaviour is `feat:`
+    or `fix:`; build/workflow-only changes are `ci:` so they don't ship a release for nothing.
+  - Subject: lowercase imperative after the type, optional scope (`feat(library): ...`). Body:
+    plain prose about what changed from the user's point of view. The subject lines become the
+    release notes, so write them for the friend using the app.
 
 ## What this is
 
@@ -32,11 +39,25 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 | `manga_dl.py` | Entry point, just launches `gui.main()` |
 | `core.py` | Site scrapers (`FanFox`, registered in `SITES`), chapter grouping, rate limiting, the parallel download pipeline (threads or processes). **No GUI imports.** |
 | `builders.py` | Output formats (`FORMATS`, `build_file`), webtoon strip slicing for EPUB. **No GUI imports** so it runs in worker processes. |
+| `paths.py` | `BUNDLE` (assets, also inside the exe) and `DATA` (settings/library: next to the script from source, `%APPDATA%\Manga Downloader` in the exe). Use these, never `__file__`, for file locations. |
+| `updater.py` | Checks GitHub's latest release, downloads the installer, runs it silently with `/update=1`. Only active in the frozen Windows build. |
+| `version.py` | `__version__`; stays `0.0.0-dev` in the repo, CI writes the real one. Don't bump it by hand. |
 | `history.py` | Per-chapter download history in `library/history.json`, covers in `library/covers/` |
 | `gui.py` | `DownloadPage`, `SettingsPage`, `LibraryPage`, `Notification`, `MainWindow`, `Settings` dataclass (saved to `settings.json`) |
 | `theme.py` | Light/dark palettes, stylesheet template, bundled Fredoka font, SVG icons |
 | `loader.py` | Hand-painted cat loading animations (`CatLoader`, `MiniCat`) |
 | `assets/` | Fonts (OFL) and icon SVGs |
+
+## Packaging and releases
+
+- `packaging/manga_dl.spec`: PyInstaller folder build (`dist/MangaDownloader/`), no console, no
+  UPX (UPX causes antivirus false positives). Unused Qt parts (QML, Quick, PDF) are filtered out.
+- `packaging/installer.iss`: Inno Setup, per-user install in `%LOCALAPPDATA%\Programs`, no admin.
+  Never change its `AppId`; updates rely on it.
+- `scripts/make_icon.py` draws `build/icon.ico` from the app icon in `theme.py`.
+- The version lives in git tags (`vX.Y.Z`) created by the release; nothing is committed back.
+- `manga_dl.py` must call `multiprocessing.freeze_support()` first, or the exe's worker
+  processes open new windows.
 
 ## Conventions
 

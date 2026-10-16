@@ -9,7 +9,9 @@ from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-ASSETS = Path(__file__).resolve().parent / "assets"
+import paths
+
+ASSETS = paths.BUNDLE / "assets"
 LIGHT, DARK, SYSTEM = "light", "dark", "system"
 
 PALETTES = {
@@ -58,6 +60,7 @@ QLabel#sitePill {
     font-size: 12px; font-weight: 600;
 }
 QLabel#greeting { color: $accent; font-size: 17px; font-weight: 700; padding-left: 4px; }
+QLabel#version { color: $muted; font-size: 11px; padding-left: 4px; }
 QPushButton#nav {
     background: transparent; border: none; border-radius: 14px;
     padding: 11px 14px; text-align: left; font-size: 15px; font-weight: 600; color: $side_text;

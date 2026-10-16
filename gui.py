@@ -1,4 +1,4 @@
-"""The pink Qt window: a Download page and a Settings page."""
+"""The pink Qt window: Download, Library and Settings pages, and the update check."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import time
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
+import requests
 from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
@@ -21,10 +22,13 @@ from PySide6.QtWidgets import (
 )
 
 import core
+import paths
 import theme
+import updater
 from history import History, ago, chapter_key
 from loader import CatLoader, MiniCat, paint_mini_cat
 from builders import FORMATS
+from version import __version__
 
 # The theme in use (theme.LIGHT or theme.DARK); helpers that paint read it.
 CURRENT = {"mode": theme.LIGHT}
@@ -67,7 +71,7 @@ class Settings:
 
     @staticmethod
     def path() -> Path:
-        return Path(__file__).resolve().parent / "settings.json"  # next to the script, ignored by git
+        return paths.DATA / "settings.json"  # next to the script (git-ignored), or %APPDATA% in the exe
 
     @classmethod
     def load(cls) -> Settings:
@@ -1205,11 +1209,13 @@ class LibraryPage(QWidget):
 
 
 class Notification(QWidget):
-    """A card that fades in at the bottom right with a happy cat when a download is finished."""
+    """A card that fades in at the bottom right with a happy cat: a download is finished, or an update is out."""
+    update_requested = Signal()
 
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.folder = ""
+        self.sticky = False
         self.fade = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.fade)
         outer = QVBoxLayout(self)
@@ -1228,7 +1234,8 @@ class Notification(QWidget):
         col = QVBoxLayout()
         col.setSpacing(6)
         head = QHBoxLayout()
-        head.addWidget(label("Yay, it's ready!", "notifyTitle"))
+        self.title = label("", "notifyTitle")
+        head.addWidget(self.title)
         head.addStretch(1)
         close = set_icon(QPushButton(objectName="notifyClose"), "close", "muted", 14)
         close.setCursor(Qt.PointingHandCursor)
@@ -1236,12 +1243,19 @@ class Notification(QWidget):
         head.addWidget(close)
         col.addLayout(head)
         self.body = label("", "notifyBody", wrap=True)
+        self.body.setOpenExternalLinks(True)
         col.addWidget(self.body)
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        open_btn = set_icon(QPushButton(" Open folder"), "folder")
-        open_btn.clicked.connect(self._open)
-        buttons.addWidget(open_btn)
+        self.open_btn = set_icon(QPushButton(" Open folder"), "folder")
+        self.open_btn.clicked.connect(self._open)
+        buttons.addWidget(self.open_btn)
+        self.later_btn = QPushButton("Later")
+        self.later_btn.clicked.connect(self.dismiss)
+        buttons.addWidget(self.later_btn)
+        self.update_btn = set_icon(QPushButton(" Update now", objectName="primary"), "download", "white")
+        self.update_btn.clicked.connect(self.update_requested)
+        buttons.addWidget(self.update_btn)
         col.addSpacing(4)
         col.addLayout(buttons)
         row.addLayout(col, 1)
@@ -1256,15 +1270,40 @@ class Notification(QWidget):
 
     def popup(self, title: str, files: int, folder: str) -> None:
         self.folder = folder
-        self.body.setText(f"<b>{html.escape(title)}</b> is all downloaded! "
-                          f"{files} {'file is' if files == 1 else 'files are'} waiting for you. Happy reading ✧")
+        self._show("Yay, it's ready!", f"<b>{html.escape(title)}</b> is all downloaded! "
+                   f"{files} {'file is' if files == 1 else 'files are'} waiting for you. Happy reading ✧",
+                   update=False)
+        self.timer.start()
+
+    def offer_update(self, version: str) -> None:
+        """Stays until Later or Update now is pressed."""
+        self._show("A new version is out!", f"Version <b>{html.escape(version)}</b> is ready (you have "
+                   f"{html.escape(__version__)}). Updating takes a moment and keeps your settings and library ✧",
+                   update=True)
+        self.timer.stop()
+
+    def update_status(self, text: str, busy: bool = True) -> None:
+        self.body.setText(text)
+        self.update_btn.setEnabled(not busy)
+        self.later_btn.setEnabled(not busy)
+
+    def _show(self, title: str, body: str, update: bool) -> None:
+        self.sticky = update
+        self.title.setText(title)
+        self.body.setText(body)
+        self.open_btn.setVisible(not update)
+        self.later_btn.setVisible(update)
+        self.update_btn.setVisible(update)
+        self.update_btn.setEnabled(True)
+        self.later_btn.setEnabled(True)
         self.adjustSize()
         self.reposition()
+        was_visible = self.isVisible() and self.anim.endValue() == 1
         self.show()
         self.raise_()
         self.cat.start()
-        self._fade(1.0)
-        self.timer.start()
+        if not was_visible:
+            self._fade(1.0)
 
     def dismiss(self) -> None:
         self.timer.stop()
@@ -1297,12 +1336,22 @@ class Notification(QWidget):
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        if self.isVisible():
+        if self.isVisible() and not self.sticky:
             self.timer.start(4000)
         super().leaveEvent(event)
 
 
+class UpdateBridge(QObject):
+    """Carries update checks and the installer download back to the GUI thread."""
+    found = Signal(object)  # updater.Release
+    progress = Signal(int, int)  # bytes done, total
+    ready = Signal(object)  # installer path
+    failed = Signal(str)
+
+
 class MainWindow(QWidget):
+    UPDATE_CHECK_MS = 6 * 60 * 60 * 1000
+
     def __init__(self):
         super().__init__(objectName="root")
         self.setWindowTitle("Manga Downloader")
@@ -1369,12 +1418,28 @@ class MainWindow(QWidget):
         sl.addWidget(self.toggle)
         sl.addSpacing(10)
         sl.addWidget(label("HI LIL GOMIEE!!", "greeting"))
+        sl.addWidget(label(f"version {__version__}", "version"))
 
         layout.addWidget(side)
         layout.addWidget(self.stack, 1)
 
         self.notification = Notification(self)
         self.download.completed.connect(self.notification.popup)
+
+        # Look for a new version a moment after opening, then every few hours.
+        self.release: updater.Release | None = None
+        self.offered = ""
+        self.updates = UpdateBridge()
+        self.updates.found.connect(self._update_found)
+        self.updates.progress.connect(self._update_progress)
+        self.updates.ready.connect(self._update_ready)
+        self.updates.failed.connect(self._update_failed)
+        self.notification.update_requested.connect(self._start_update)
+        if updater.can_install():
+            QTimer.singleShot(3000, lambda: self.check_updates(first=True))
+            self.update_timer = QTimer(self, interval=self.UPDATE_CHECK_MS)
+            self.update_timer.timeout.connect(self.check_updates)
+            self.update_timer.start()
 
         hints = QGuiApplication.styleHints()
         if hasattr(hints, "colorSchemeChanged"):  # Qt 6.5+: follow the system switching light/dark
@@ -1425,6 +1490,60 @@ class MainWindow(QWidget):
         else:
             self.download.open_manga(url, action)
         self.show_page(0)
+
+    # ----------------------------------------------------------------------- updates
+
+    def check_updates(self, first: bool = False) -> None:
+        def work():
+            try:
+                if first:
+                    updater.cleanup()
+                release = updater.latest()
+            except (requests.RequestException, ValueError, KeyError):
+                return  # offline or GitHub is busy; try again at the next check
+            if release and updater.is_newer(release):
+                self.updates.found.emit(release)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_found(self, release: updater.Release) -> None:
+        self.release = release
+        if release.version != self.offered:  # don't nag again about one that was put off
+            self.offered = release.version
+            self.notification.offer_update(release.version)
+
+    def _start_update(self) -> None:
+        if self.download.running:
+            self.notification.update_status("A download is still going. Update once it's finished ✧", busy=False)
+            return
+        self.notification.update_status("Getting the update…")
+        release = self.release
+
+        def work():
+            try:
+                self.updates.ready.emit(updater.download(release, self.updates.progress.emit))
+            except (requests.RequestException, OSError) as e:
+                self.updates.failed.emit(str(e))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_progress(self, done: int, total: int) -> None:
+        self.notification.update_status(f"Getting the update… {done * 100 // max(total, 1)}% "
+                                        f"({fmt_size(done)} of {fmt_size(total)})")
+
+    def _update_ready(self, installer: Path) -> None:
+        try:
+            updater.install(installer)
+        except OSError as e:
+            self._update_failed(str(e))
+            return
+        self.notification.update_status("Installing! The app reopens by itself in a few seconds ✧")
+        QTimer.singleShot(800, QApplication.instance().quit)
+
+    def _update_failed(self, message: str) -> None:
+        self.notification.update_status(
+            f"The update didn't work ({html.escape(message)}). Try again, or get it from "
+            f'<a href="{updater.RELEASES_PAGE}">GitHub</a>.', busy=False)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

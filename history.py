@@ -12,7 +12,9 @@ import re
 import time
 from pathlib import Path
 
-LIBRARY = Path(__file__).resolve().parent / "library"
+import paths
+
+LIBRARY = paths.DATA / "library"
 
 
 def chapter_key(number: float) -> str:

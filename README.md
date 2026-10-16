@@ -7,7 +7,19 @@ A small pink desktop app that downloads a manga and saves it as one file per vol
 
 - fanfox.net (`https://fanfox.net/manga/<title>/`)
 
-## Quick start
+## Install (Windows)
+
+1. Open the [latest release](https://github.com/RealOrangeKun/manga-downloader/releases/latest) and
+   download **MangaDownloader-Setup-x.y.z.exe**.
+2. Run it. Windows may say "Windows protected your PC" because the app isn't signed: click
+   **More info**, then **Run anyway**. No admin rights are needed.
+3. Open **Manga Downloader** from the Start menu.
+
+That's the only time you install it. When a new version is out, the app shows a card with an
+**Update now** button; it downloads the new version, installs it and reopens by itself. Your
+settings and library are kept (they live in `%APPDATA%\Manga Downloader`).
+
+## Run from source
 
 Needs Python 3.10 or newer. Run these from the project folder.
 
@@ -57,9 +69,11 @@ Every manga you've downloaded gets a card with its cover, how much of the series
 - If you delete or move a downloaded file, it no longer counts as downloaded and can be
   downloaded again. The × on a card removes it from the library; your files stay.
 
-History lives in `library/` next to `manga_dl.py` (git-ignored).
+History lives in `library/` next to `manga_dl.py` (git-ignored), or in `%APPDATA%\Manga Downloader`
+in the installed app.
 
-**Settings page** (saved to `settings.json` next to `manga_dl.py`; it is git-ignored)
+**Settings page** (saved to `settings.json` next to `manga_dl.py`, git-ignored; in the installed app
+`%APPDATA%\Manga Downloader`)
 
 - Theme: light, dark, or match your system (the moon/sun button in the sidebar switches too).
 - Default download folder and temp folder, and whether to keep temp files.
@@ -76,12 +90,34 @@ Downloads run on real OS threads; Python releases the GIL while waiting on the n
 they run at the same time. Building files (EPUB slicing, PDF, image conversion) is CPU work,
 so it runs in separate processes and can use several cores at once.
 
+## Releases
+
+Every push to `main` runs [the release workflow](.github/workflows/release.yml). It reads the
+commit messages since the last release ([conventional commits](https://www.conventionalcommits.org)):
+
+| Commit starts with | Example | New version |
+|---|---|---|
+| `fix:` or `perf:` | `fix: retry images that time out` | 1.0.0 → 1.0.1 |
+| `feat:` | `feat(library): sort by last read` | 1.0.1 → 1.1.0 |
+| `feat!:` or a `BREAKING CHANGE:` line | `feat!: new settings format` | 1.1.0 → 2.0.0 |
+| `docs:`, `chore:`, `ci:`, `refactor:`, `style:`, `test:` | `docs: fix typo` | no release |
+
+If there's a new version, it builds the exe with PyInstaller ([packaging/manga_dl.spec](packaging/manga_dl.spec)),
+wraps it in an Inno Setup installer ([packaging/installer.iss](packaging/installer.iss)), and publishes a
+GitHub Release tagged `vX.Y.Z` with the installer and notes made from the commits. The tag is
+the source of the version; `version.py` says `0.0.0-dev` in the repo and gets the real number
+during the build.
+
+To build locally on Windows: `pip install pyinstaller`, `python scripts/make_icon.py`,
+`pyinstaller packaging/manga_dl.spec --noconfirm`, then `ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss`.
+
 ## Notes
 
 - Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
   the original strips; use a reader with a continuous-scroll mode for those.
 - Code layout: `core.py` (sites, rate limiting, download pipeline), `builders.py` (output
-  formats), `gui.py` (the window). To add a site, write a class like `FanFox` in `core.py`
+  formats), `gui.py` (the window), `updater.py` (checks GitHub for new versions and installs them),
+  `paths.py` (where assets and user data live, from source and in the exe). To add a site, write a class like `FanFox` in `core.py`
   with `url_re`, `info()`, `page_urls()` and `image()`, and add it to `SITES`.
 - The interface uses the bundled [Fredoka](https://github.com/hafontia/Fredoka-One) font
   (`assets/fonts`, SIL Open Font License, see `assets/fonts/OFL.txt`). The icons and the
