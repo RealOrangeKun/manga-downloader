@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+**Keep this file up to date.** Whenever a change makes something here wrong or incomplete (a
+file added, moved or renamed, a new rule or convention, a different workflow, something the
+user had to explain), update this file in the same change. If the user states a preference
+about how to work, add it here.
+
 ## Git rules
 
 - **Never add a `Co-Authored-By: Claude ...` line (or any Claude/AI attribution) to commit
@@ -23,8 +28,8 @@ Nyanga (nyan + manga): a PySide6 desktop app (pink theme, cat mascot) that downl
 saves it as one file per volume or per N chapters: CBZ, PDF, EPUB or image folders. Only site
 so far: fanfox.net (plain HTTP, no headless browser).
 
-- Repo: https://github.com/RealOrangeKun/nyanga (the local folder may still be called
-  `manga-downloader`).
+- Repo: https://github.com/RealOrangeKun/nyanga, checked out at `~/Projects/nyanga`. The
+  user is the only collaborator; nobody else pushes or merges.
 - Who uses it: the user's friend, on Windows, through the installer from GitHub Releases. The
   user develops on Linux and runs it from source. Judge changes by what the friend sees.
 - Tone: cute and cozy. UI text is short and friendly with the odd `✧` / `♡` / `✿` (see the
@@ -49,7 +54,7 @@ When asked for a change, do the whole job without waiting to be told each step:
    - README screenshots when the Download page or sidebar looks different:
      `.venv/bin/python scripts/readme_screenshots.py` (needs network). The cat GIFs in
      `assets/readme/` have no script; if the cats change, say they need re-rendering.
-   - This file when files, layout or rules change.
+   - This file, whenever anything in it stops being true (see the top).
    - Never edit `CHANGELOG.md` or `version.py` by hand; the release writes them.
 5. Finish with a short summary of what changed and how it was checked, and the conventional
    commit message(s) you'd use. Commit/push only once the user says so; pushing to `main`
@@ -95,8 +100,9 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
   `settings.json` and `library/` from an old source checkout into `%APPDATA%\Nyanga`.
 - The release (windows-latest runner) builds the exe and installer, publishes GitHub Release
   `vX.Y.Z` with `Nyanga-Setup-X.Y.Z.exe`, then commits the regenerated `CHANGELOG.md` back to
-  `main` as `docs: changelog for vX.Y.Z` (no release, so no loop). The version itself lives
-  only in the tags. Pull before working, since that bot commit lands after each release.
+  `main` as `docs: changelog for vX.Y.Z` (no release, so no loop). That commit is authored by
+  `github-actions[bot]`, which is fine. The version itself lives only in the tags. Pull
+  before working, since that bot commit lands after each release.
 - The updater picks the release asset whose name ends in `.exe` and contains `setup`; keep the
   installer named like that.
 - `nyanga.py` must call `multiprocessing.freeze_support()` first, or the exe's worker
