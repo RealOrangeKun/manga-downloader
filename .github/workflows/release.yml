@@ -1,6 +1,7 @@
 # On every push to main: work out the next version from the conventional commits since the last
 # release, and if there is one, build the Windows installer and publish it as a GitHub Release.
-# The tag the release creates (v1.2.3) is where the version lives; nothing is committed back.
+# The tag the release creates (v1.2.3) is where the version lives; the only thing committed back
+# is CHANGELOG.md, as a docs: commit so it doesn't make another release.
 name: Release
 
 on:
@@ -29,7 +30,7 @@ jobs:
 
       - name: Work out the next version
         id: version
-        run: python scripts/next_version.py --notes notes.md --write-version
+        run: python scripts/next_version.py --notes notes.md --changelog CHANGELOG.md --write-version
 
       # PyInstaller's ready-made bootloader (the exe's launcher) is the same file in every app built
       # with it, malware included, so antivirus often flags it. Compiling our own (MSVC is on the
@@ -67,3 +68,15 @@ jobs:
           --title "v${{ steps.version.outputs.version }}"
           --notes-file notes.md
           --target ${{ github.sha }}
+
+      - name: Commit the changelog
+        if: steps.version.outputs.release == 'true'
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true  # stop at the first git command that fails
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -- version.py
+          git add CHANGELOG.md
+          git commit -m "docs: changelog for v${{ steps.version.outputs.version }}"
+          git pull --rebase origin main
+          git push origin HEAD:main

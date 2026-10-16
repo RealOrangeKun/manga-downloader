@@ -187,9 +187,10 @@ commit messages since the last release ([conventional commits](https://www.conve
 
 If there's a new version, it builds the exe with PyInstaller ([packaging/nyanga.spec](packaging/nyanga.spec)),
 wraps it in an Inno Setup installer ([packaging/installer.iss](packaging/installer.iss)), and publishes a
-GitHub Release tagged `vX.Y.Z` with the installer and notes made from the commits. The tag is
-the source of the version; `version.py` says `0.0.0-dev` in the repo and gets the real number
-during the build.
+GitHub Release tagged `vX.Y.Z` with the installer and notes made from the commits. The same
+notes go into [CHANGELOG.md](CHANGELOG.md), which the workflow commits back as a `docs:` commit.
+The tag is the source of the version; `version.py` says `0.0.0-dev` in the repo and gets the
+real number during the build.
 
 To build locally on Windows: `pip install pyinstaller`, `python scripts/make_icon.py`,
 `pyinstaller packaging/nyanga.spec --noconfirm`, then `ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss`.
