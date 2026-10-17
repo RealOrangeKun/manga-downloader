@@ -144,6 +144,14 @@ jobs:
           --notes-file out/version/notes.md
           --target ${{ github.sha }}
 
+      - name: Rebuild the website
+        # So its download button and What's new page pick up this release.
+        env:
+          HOOK: ${{ secrets.WEBSITE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "No WEBSITE_DEPLOY_HOOK secret, skipping"; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null || echo "::warning::Website rebuild didn't start"
+
       - name: Commit the changelog
         run: |
           set -e
