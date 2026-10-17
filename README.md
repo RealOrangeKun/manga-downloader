@@ -136,7 +136,9 @@ closed, that spot shows the delivery cat and how far along it is:
    current page, and **Open folder** shows the results when it's done.
 
 Running it again with the same choices resumes where it stopped. Files that already exist
-are skipped, so delete a file to rebuild it.
+are skipped, so delete a file to rebuild it. The exception: if the site has added chapters
+to a volume you already have, that file is made again with them (the old one stays until
+the new one is done).
 
 Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
 the original strips; use a reader with a continuous-scroll mode for those.

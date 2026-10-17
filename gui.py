@@ -1490,16 +1490,31 @@ class DownloadPage(QWidget):
         self._refresh_run_status()
 
         groups = [self.groups[r] for r in rows]
+        rebuild = self._incomplete(groups, fmt)
 
         def on_status(index: int, state: str, frac: float, msg: str) -> None:
             self.bridge.status.emit(rows[index], state, frac, msg)
 
         def work() -> None:
             failed = core.run_jobs(self.site, title, groups, fmt, self.book_dir, work_dir,
-                                   self.settings.keep_temp, workers, self.cancel, on_status, mode)
+                                   self.settings.keep_temp, workers, self.cancel, on_status, mode, rebuild)
             self.bridge.finished.emit([rows[i] for i in failed], self.cancel.is_set())
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _incomplete(self, groups: list[core.Group], fmt: str) -> frozenset[int]:
+        """Groups whose file exists but holds only some of its chapters (the site added more since),
+        so it gets made again. A file the history knows nothing about is left alone."""
+        downloaded = (self.history.get(self.key) or {}).get("downloaded", {})
+        found = set()
+        for i, group in enumerate(groups):
+            target = core.target_path(self.info.title, group, fmt, self.book_dir)
+            if not target.exists():
+                continue
+            inside = [k for k in group_keys(group) if k in downloaded and Path(downloaded[k]) == target]
+            if inside and len(inside) < len(group.chapters):
+                found.add(i)
+        return frozenset(found)
 
     def _on_status(self, row: int, state: str, frac: float, msg: str) -> None:
         bar = self._bar(row)

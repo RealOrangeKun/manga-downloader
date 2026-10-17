@@ -345,7 +345,9 @@ def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
                 (ch_dir / f"{i:04d}{image_ext(data)}").write_bytes(data)
             on_progress((done + i / len(urls)) / n, f"Ch. {fmt_num(ch.number)}  ·  page {i}/{len(urls)}")
         (ch_dir / ".done").touch()
-    return sorted(p for p in group_dir.glob("ch_*/*") if p.name != ".done" and ".conv." not in p.name)
+    # Only this group's chapters: the folder can hold others left over from an earlier attempt.
+    dirs = [group_dir / f"ch_{ch.number:08.2f}" for ch in group.chapters]
+    return sorted(p for d in dirs for p in d.glob("*") if p.name != ".done" and ".conv." not in p.name)
 
 
 # Job states reported to on_status.
@@ -356,23 +358,37 @@ QUEUED, DOWNLOADING, BUILDING, DONE, SKIPPED, FAILED, CANCELLED = (
 THREADS, PROCESSES = "threads", "processes"
 
 
+def target_path(title: str, group: Group, fmt: str, book_dir: Path) -> Path:
+    """Where a group's file (or folder, for images) goes."""
+    name = safe_name(f"{title} - {group.label}")
+    return book_dir / (name if fmt == "images" else f"{name}.{fmt}")
+
+
 def make_file(site, index: int, group: Group, fmt: str, title: str, book_dir: Path, work_dir: Path,
               keep_tmp: bool, cancel, report: Callable[[int, str, float, str], None],
-              build: Callable[..., Path]) -> bool:
-    """Download one group and build its file. Returns False if it failed."""
-    name = safe_name(f"{title} - {group.label}")
-    target = book_dir / (name if fmt == "images" else f"{name}.{fmt}")
+              build: Callable[..., Path], rebuild: bool = False) -> bool:
+    """Download one group and build its file. An existing file is skipped, unless `rebuild` (it is
+    missing chapters added since): then a new one is built beside it and replaces it once done.
+    Returns False if it failed."""
+    target = target_path(title, group, fmt, book_dir)
+    out = target
     try:
         if cancel.is_set():
             raise Cancelled
-        if target.exists():
+        if target.exists() and not rebuild:
             report(index, SKIPPED, 1.0, str(target))
             return True
         group_dir = work_dir / safe_name(group.label)
         images = download_group(site, group, group_dir, cancel,
                                 lambda frac, msg: report(index, DOWNLOADING, frac, msg))
-        report(index, BUILDING, 1.0, f"Making {fmt.upper()}")
-        build(fmt, images, target, f"{title} - {group.label}")
+        report(index, BUILDING, 1.0, f"{'Remaking' if rebuild else 'Making'} {fmt.upper()}")
+        if target.exists():
+            out = target.with_name(f"rebuilding - {target.name}")
+        build(fmt, images, out, f"{title} - {group.label}")
+        if out != target:  # swap the finished file in; the old one stays until then
+            if target.is_dir():
+                shutil.rmtree(target)
+            os.replace(out, target)
         if not keep_tmp:
             shutil.rmtree(group_dir, ignore_errors=True)
         report(index, DONE, 1.0, str(target))
@@ -383,18 +399,24 @@ def make_file(site, index: int, group: Group, fmt: str, title: str, book_dir: Pa
     except Exception as e:  # report and carry on with the other files
         report(index, FAILED, 0.0, str(e))
         return False
+    finally:
+        if out != target and out.exists():  # a rebuild that didn't finish; the old file is untouched
+            shutil.rmtree(out) if out.is_dir() else out.unlink()
 
 
-def _process_job(site, index, group, fmt, title, book_dir, work_dir, keep_tmp, cancel, events) -> bool:
+def _process_job(site, index, group, fmt, title, book_dir, work_dir, keep_tmp, cancel, events,
+                 rebuild=False) -> bool:
     """Entry point for process mode: runs in a worker process and reports through a queue."""
     return make_file(site, index, group, fmt, title, book_dir, work_dir, keep_tmp, cancel,
-                     lambda *status: events.put(status), build_file)
+                     lambda *status: events.put(status), build_file, rebuild)
 
 
 def run_jobs(site, title: str, groups: list[Group], fmt: str, book_dir: Path, work_dir: Path,
              keep_tmp: bool, workers: int, cancel: threading.Event,
-             on_status: Callable[[int, str, float, str], None], mode: str = THREADS) -> list[int]:
+             on_status: Callable[[int, str, float, str], None], mode: str = THREADS,
+             rebuild: frozenset[int] = frozenset()) -> list[int]:
     """Download and build each group, `workers` at a time. Returns the indexes that failed.
+    Groups whose index is in `rebuild` are made again even if their file exists.
 
     THREADS: downloads run on threads (the GIL is released while waiting on the network) and
     building runs in a process pool, so CPU-heavy builds use several cores.
@@ -404,7 +426,8 @@ def run_jobs(site, title: str, groups: list[Group], fmt: str, book_dir: Path, wo
     book_dir.mkdir(parents=True, exist_ok=True)
     workers = max(1, workers)
     if mode == PROCESSES:
-        ok = _run_in_processes(site, title, groups, fmt, book_dir, work_dir, keep_tmp, workers, cancel, on_status)
+        ok = _run_in_processes(site, title, groups, fmt, book_dir, work_dir, keep_tmp, workers, cancel, on_status,
+                               rebuild)
     else:
         with ProcessPoolExecutor(max_workers=min(workers, os.cpu_count() or 1)) as builders, \
                 ThreadPoolExecutor(max_workers=workers) as pool:
@@ -412,7 +435,7 @@ def run_jobs(site, title: str, groups: list[Group], fmt: str, book_dir: Path, wo
                 return builders.submit(build_file, *args).result()
 
             futures = [pool.submit(make_file, site, i, g, fmt, title, book_dir, work_dir, keep_tmp,
-                                   cancel, on_status, build) for i, g in enumerate(groups)]
+                                   cancel, on_status, build, i in rebuild) for i, g in enumerate(groups)]
             ok = [f.result() for f in futures]
 
     failed = [i for i, good in enumerate(ok) if not good]
@@ -425,7 +448,7 @@ def run_jobs(site, title: str, groups: list[Group], fmt: str, book_dir: Path, wo
 
 
 def _run_in_processes(site, title, groups, fmt, book_dir, work_dir, keep_tmp, workers, cancel,
-                      on_status) -> list[bool]:
+                      on_status, rebuild=frozenset()) -> list[bool]:
     with Manager() as manager:
         shared_cancel = manager.Event()
         events = manager.Queue()
@@ -447,7 +470,7 @@ def _run_in_processes(site, title, groups, fmt, book_dir, work_dir, keep_tmp, wo
         try:
             with ProcessPoolExecutor(max_workers=workers) as pool:
                 futures = [pool.submit(_process_job, remote_site, i, g, fmt, title, book_dir, work_dir,
-                                       keep_tmp, shared_cancel, events) for i, g in enumerate(groups)]
+                                       keep_tmp, shared_cancel, events, i in rebuild) for i, g in enumerate(groups)]
                 ok = []
                 for i, f in enumerate(futures):
                     try:
