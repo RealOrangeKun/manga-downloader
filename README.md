@@ -42,7 +42,8 @@
 ## ♡ What it does
 
 - 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres and every
-  chapter show up, with the size of each file.
+  chapter show up, with the size of each file. Show the results as a list or a grid of covers,
+  from small to very large.
 - 📚 **Volumes, not a pile of pages**: one CBZ, PDF or EPUB per volume, or per *N* chapters when the
   site has no volume numbers. Webtoon strips are cut into pages for EPUB.
 - ⚡ **Fast but polite**: several files at once, with one shared speed limit so the site isn't flooded.
@@ -137,7 +138,8 @@ closed, that spot shows the delivery cat and how far along it is:
 **Download page**
 
 1. Pick a source, type the manga's name and press **Search**. Click the right one in the
-   results (use ‹ › under them for more); its cover, title, genres and chapter count appear.
+   results (use ‹ › under them for more, and the buttons next to **Pick one** to switch between a
+   list and a grid of covers and pick their size); its cover, title, genres and chapter count appear.
    **Back to results** lets you pick another. Pasting a title link instead of a name works too.
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
    title, how many chapters go in each file.

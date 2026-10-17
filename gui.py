@@ -92,6 +92,8 @@ class Settings:
     theme: str = theme.SYSTEM
     default_source: str = core.SITES[0].name
     files_per_page: int = 20
+    results_grid: bool = False  # search results as a grid of covers instead of a list
+    results_size: int = 1  # index into ResultItem.SIZES
     seen_version: str = ""  # the version last opened, to show What's new once after an update
 
     @staticmethod
@@ -161,7 +163,7 @@ def rounded_pixmap(data: bytes | None, w: int, h: int, radius: int = 16) -> QPix
     else:  # placeholder: pink card with a heart
         p.fillRect(0, 0, w, h, theme.color(CURRENT["mode"], "chip"))
         p.setPen(theme.color(CURRENT["mode"], "accent"))
-        p.setFont(QFont(p.font().family(), 40))
+        p.setFont(QFont(p.font().family(), min(40, max(14, w * 3 // 5))))
         p.drawText(QRectF(0, 0, w, h), Qt.AlignCenter, "♡")
     p.end()
     return out
@@ -310,22 +312,43 @@ class ResultItem(QFrame):
     """One search result: cover, title and a line about it. Click to open it."""
     clicked = Signal()
 
-    def __init__(self, result: core.SearchResult):
+    SIZES = ["Small", "Medium", "Big", "Large", "Very large"]
+    LIST_WIDTHS = [40, 54, 72, 96, 124]  # cover width per size; covers are 54:76
+    GRID_WIDTHS = [84, 108, 136, 168, 208]
+
+    def __init__(self, result: core.SearchResult, grid: bool = False, size: int = 1):
         super().__init__(objectName="result")
         self.result = result
         self.data: bytes | None = None
+        self.grid = grid
+        self.cover_w = (self.GRID_WIDTHS if grid else self.LIST_WIDTHS)[size]
+        self.cover_h = round(self.cover_w * 76 / 54)
         self.setCursor(Qt.PointingHandCursor)
+        self.cover = QLabel()
+        self.cover.setFixedSize(self.cover_w, self.cover_h)
+        self.set_cover(None)
+        meta = "  ·  ".join(x for x in (result.status, result.latest) if x)
+        if grid:  # a tile: cover on top, title underneath
+            col = QVBoxLayout(self)
+            col.setContentsMargins(10, 10, 10, 12)
+            col.setSpacing(6)
+            col.addWidget(self.cover, 0, Qt.AlignHCenter)
+            title = label(result.title, "resultTitle", wrap=True)
+            title.setAlignment(Qt.AlignHCenter)
+            col.addWidget(title)
+            if meta:
+                info = label(meta, "meta", wrap=True)
+                info.setAlignment(Qt.AlignHCenter)
+                col.addWidget(info)
+            col.addStretch(1)
+            return
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 10, 14, 10)
         row.setSpacing(14)
-        self.cover = QLabel()
-        self.cover.setFixedSize(54, 76)
-        self.set_cover(None)
         row.addWidget(self.cover, 0, Qt.AlignTop)
         text = QVBoxLayout()
         text.setSpacing(3)
         text.addWidget(label(result.title, "resultTitle", wrap=True))
-        meta = "  ·  ".join(x for x in (result.status, result.latest) if x)
         if meta:
             text.addWidget(label(meta, "meta", wrap=True))
         if result.author:
@@ -333,9 +356,13 @@ class ResultItem(QFrame):
         text.addStretch(1)
         row.addLayout(text, 1)
 
+    def min_width(self) -> int:
+        """How narrow this card can get and still look right, for working out the columns."""
+        return self.cover_w + 44 if self.grid else self.cover_w + 280
+
     def set_cover(self, data: bytes | None) -> None:
         self.data = data
-        self.cover.setPixmap(rounded_pixmap(data, 54, 76, 10))
+        self.cover.setPixmap(rounded_pixmap(data, self.cover_w, self.cover_h, max(8, self.cover_w // 6)))
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
@@ -523,6 +550,21 @@ class DownloadPage(QWidget):
         self.results_card, rl = card()
         rhead = QHBoxLayout()
         rhead.addWidget(label("Pick one ✧", "h2"))
+        rhead.addSpacing(10)
+        self.view_btns = QButtonGroup(self)
+        for grid, icon, tip in ((False, "list", "Show as a list"), (True, "grid", "Show as a grid of covers")):
+            btn = set_icon(QPushButton(objectName="viewToggle", checkable=True), icon)
+            btn.setToolTip(tip)
+            btn.setChecked(grid == settings.results_grid)
+            btn.clicked.connect(lambda _=False, g=grid: self._set_results_look(grid=g))
+            self.view_btns.addButton(btn)
+            rhead.addWidget(btn)
+        self.size_box = combo_box()
+        self.size_box.addItems(ResultItem.SIZES)
+        self.size_box.setCurrentIndex(min(max(settings.results_size, 0), len(ResultItem.SIZES) - 1))
+        self.size_box.setToolTip("How big the covers are")
+        self.size_box.currentIndexChanged.connect(lambda i: self._set_results_look(size=i))
+        rhead.addWidget(self.size_box)
         rhead.addStretch(1)
         self.results_dots = MiniCat(lambda: CURRENT["mode"])
         rhead.addWidget(self.results_dots)
@@ -535,9 +577,9 @@ class DownloadPage(QWidget):
         self.results_grid = QGridLayout()
         self.results_grid.setHorizontalSpacing(12)
         self.results_grid.setVerticalSpacing(12)
-        self.results_grid.setColumnStretch(0, 1)
-        self.results_grid.setColumnStretch(1, 1)
+        self.results_cols = 0
         rl.addLayout(self.results_grid)
+        self.results_card.installEventFilter(self)  # re-flow the columns when the window resizes
         rpager = QHBoxLayout()
         rpager.addStretch(1)
         self.rprev_btn = QPushButton("‹", objectName="pager")
@@ -879,20 +921,55 @@ class DownloadPage(QWidget):
 
     def _clear_results(self) -> None:
         for item in self.results:
+            self.results_grid.removeWidget(item)  # now, not when deleteLater gets round to it
+            item.hide()
             item.deleteLater()
         self.results = []
+
+    def _fill_results(self, results: list[core.SearchResult]) -> None:
+        self._clear_results()
+        grid, size = self.settings.results_grid, self.size_box.currentIndex()
+        for result in results:
+            item = ResultItem(result, grid, size)
+            item.clicked.connect(lambda r=result: self._pick(r))
+            if result.cover_url in self.cover_cache:
+                item.set_cover(self.cover_cache[result.cover_url])
+            self.results.append(item)
+        self.results_cols = 0
+        self._place_results()
+
+    def _place_results(self) -> None:
+        """Lay the cards out in as many columns as fit (lists stop at 3, so rows stay readable)."""
+        if not self.results:
+            return
+        spacing = self.results_grid.horizontalSpacing()
+        m = self.results_card.layout().contentsMargins()
+        room = self.results_card.width() - m.left() - m.right()
+        cols = max(1, (room + spacing) // (self.results[0].min_width() + spacing))
+        if not self.settings.results_grid:
+            cols = min(cols, 3)
+        if cols == self.results_cols:
+            return
+        for c in range(max(cols, self.results_grid.columnCount())):
+            self.results_grid.setColumnStretch(c, 1 if c < cols else 0)
+        self.results_cols = cols
+        for i, item in enumerate(self.results):
+            self.results_grid.removeWidget(item)
+            self.results_grid.addWidget(item, i // cols, i % cols)  # fills its cell, so a row's cards match
+
+    def _set_results_look(self, grid: bool | None = None, size: int | None = None) -> None:
+        if grid is not None:
+            self.settings.results_grid = grid
+        if size is not None:
+            self.settings.results_size = size
+        self.settings.save()
+        if self.results and self.search_page in self.search_pages:
+            self._fill_results(self.search_pages[self.search_page])
 
     def _show_results_page(self, page: int) -> None:
         results = self.search_pages[page]
         self.search_page = page
-        self._clear_results()
-        for i, result in enumerate(results):
-            item = ResultItem(result)
-            item.clicked.connect(lambda r=result: self._pick(r))
-            if result.cover_url in self.cover_cache:
-                item.set_cover(self.cover_cache[result.cover_url])
-            self.results_grid.addWidget(item, i // 2, i % 2)
-            self.results.append(item)
+        self._fill_results(results)
         self.results_count.setText(f"page {page} of {self.search_total}")
         self.rpage_lbl.setText(f"Page {page} of {self.search_total}")
         for w in (self.rprev_btn, self.rpage_lbl, self.rnext_btn):
@@ -1288,7 +1365,12 @@ class DownloadPage(QWidget):
         self._update_summary()
 
     def eventFilter(self, obj, event) -> bool:
-        """Paws: click to toggle, shift-click to set everything since the last click, drag to paint."""
+        """Paws: click to toggle, shift-click to set everything since the last click, drag to paint.
+        Also re-flows the search results when their card changes width."""
+        if obj is self.results_card:
+            if event.type() == QEvent.Resize:
+                self._place_results()
+            return super().eventFilter(obj, event)
         if obj is not self.table.viewport() or self.running or not self.groups:
             return super().eventFilter(obj, event)
         kind = event.type()

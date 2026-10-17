@@ -91,6 +91,9 @@ QPushButton {
 }
 QPushButton:hover { background: $button_hover; }
 QPushButton:disabled { background: $disabled_bg; color: $disabled_text; }
+QPushButton#viewToggle { background: transparent; padding: 7px; border-radius: 11px; }
+QPushButton#viewToggle:hover { background: $button_hover; }
+QPushButton#viewToggle:checked { background: $button; }
 QPushButton#pager { min-width: 34px; max-width: 34px; padding: 4px 0; font-size: 20px; font-weight: 700; }
 QPushButton#primary {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary_a, stop:1 $primary_b);
@@ -262,6 +265,8 @@ _ICONS = {
     "check": '<path d="M5.5 12.5l4.2 4.2 8.8-9.4" fill="none" stroke="COLOR" stroke-width="2.6" '
              'stroke-linecap="round" stroke-linejoin="round"/>',
     "select_none": '<rect x="4.5" y="4.5" width="15" height="15" rx="4.5" fill="none" stroke="COLOR" stroke-width="2.2"/>',
+    "grid": '<rect x="4" y="4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/><rect x="13.4" y="4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/>'
+            '<rect x="4" y="13.4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/><rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/>',
     "list": '<path d="M9 7h10M9 12h10M9 17h6" stroke="COLOR" stroke-width="2.4" stroke-linecap="round"/>'
             '<circle cx="5" cy="7" r="1.4" fill="COLOR"/><circle cx="5" cy="12" r="1.4" fill="COLOR"/>'
             '<circle cx="5" cy="17" r="1.4" fill="COLOR"/>',
