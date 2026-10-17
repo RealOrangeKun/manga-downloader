@@ -308,10 +308,10 @@ class SortHeader(QHeaderView):
         item = self.model().headerData(index, Qt.Horizontal, Qt.TextAlignmentRole)
         align = Qt.AlignmentFlag(int(item)) if item is not None else Qt.AlignCenter
         text = self.model().headerData(index, Qt.Horizontal) or ""
-        font = QFont(self.font())
-        font.setWeight(QFont.DemiBold)  # as styled in theme.py
-        width = QFontMetrics(font).horizontalAdvance(text)
-        if align & Qt.AlignRight:  # 9 and 10: the section padding in theme.py
+        # The style's own measure of the title (with the real font, unlike self.font() under a
+        # stylesheet), minus the section padding from theme.py: 10 left, 9 right.
+        width = super().sectionSizeFromContents(index).width() - 19 if text else 0
+        if align & Qt.AlignRight:
             x = rect.right() - 9 - width - 12  # before the text
         elif align & Qt.AlignLeft:
             x = rect.left() + 10 + width + 4  # after the text
