@@ -21,7 +21,7 @@ import requests
 import paths
 from version import __version__
 
-REPO = "RealOrangeKun/nyanga"
+REPO = "nyanga-app/nyanga-app"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 CHANGELOG = f"https://github.com/{REPO}/blob/main/CHANGELOG.md"
 _API = f"https://api.github.com/repos/{REPO}/releases/latest"

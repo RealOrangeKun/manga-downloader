@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TAG_RE = re.compile(r"v(\d+)\.(\d+)\.(\d+)$")
 COMMIT_RE = re.compile(r"(?P<type>\w+)(?:\((?P<scope>[^)]*)\))?(?P<bang>!)?: (?P<subject>.+)")
-REPO = "https://github.com/RealOrangeKun/nyanga"
+REPO = "https://github.com/nyanga-app/nyanga-app"
 SECTIONS = [("breaking", "Breaking changes"), ("feat", "New"), ("fix", "Fixes"), ("perf", "Faster")]
 TRAILER_RE = re.compile(r"^(co-authored-by|signed-off-by|refs?|closes|fixes):", re.I)
 

@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/RealOrangeKun/nyanga/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RealOrangeKun/nyanga?style=for-the-badge&color=ff5c9a&label=latest"></a>
-  <a href="https://github.com/RealOrangeKun/nyanga/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/RealOrangeKun/nyanga/total?style=for-the-badge&color=ff9cc6"></a>
+  <a href="https://github.com/nyanga-app/nyanga-app/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/nyanga-app/nyanga-app?style=for-the-badge&color=ff5c9a&label=latest"></a>
+  <a href="https://github.com/nyanga-app/nyanga-app/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/nyanga-app/nyanga-app/total?style=for-the-badge&color=ff9cc6"></a>
   <img alt="Windows" src="https://img.shields.io/badge/windows-installer-ffb3cf?style=for-the-badge">
 </p>
 
@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/RealOrangeKun/nyanga/releases/latest"><b>⬇ Download for Windows</b></a>
+  <a href="https://github.com/nyanga-app/nyanga-app/releases/latest"><b>⬇ Download for Windows</b></a>
   &nbsp;·&nbsp; <a href="#-using-it">How to use it</a>
   &nbsp;·&nbsp; <a href="#-run-from-source">Run from source</a>
 </p>
@@ -88,7 +88,7 @@ Psst: give the cat in the top-left corner a tap ♡
 
 ## 💝 Install (Windows)
 
-1. Open the [latest release](https://github.com/RealOrangeKun/nyanga/releases/latest) and
+1. Open the [latest release](https://github.com/nyanga-app/nyanga-app/releases/latest) and
    download **Nyanga-Setup-x.y.z.exe**.
 2. Run it. Windows may say "Windows protected your PC" because the app isn't signed: click
    **More info**, then **Run anyway**. No admin rights are needed. You only see this once:
