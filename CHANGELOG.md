@@ -2,6 +2,20 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/RealOrangeKun/nyanga/releases) with its installer.
 
+## [1.3.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.3.0) (2026-10-17)
+
+### New
+- library: add or remove a manga from the library with a button instead of on every lookup
+- tap the sidebar cat to make it hop
+- check folders, search text and number fields before using them
+- browse more search results page by page
+- pick files by volume range, and by chapter only for chapters not in a volume
+
+### Fixes
+- keep the sort arrow clear of long column titles
+- library: keep download progress when a manga is removed, and offer to delete its files
+- remake a volume's file when the site adds chapters to it
+
 ## [1.2.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.2.0) (2026-10-17)
 
 ### New
