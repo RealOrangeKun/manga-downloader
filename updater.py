@@ -6,6 +6,7 @@ silently: it closes the app, replaces its files, and opens the new version. No G
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -39,6 +40,20 @@ def parse(version: str) -> tuple[int, int, int]:
     """'v1.2.3' -> (1, 2, 3); anything unreadable (like the dev version) counts as 0.0.0."""
     m = re.match(r"v?(\d+)\.(\d+)\.(\d+)$", version.strip())
     return (int(m[1]), int(m[2]), int(m[3])) if m else (0, 0, 0)
+
+
+def notes() -> list[dict]:
+    """The release notes the release workflow bundles into the exe (newest first); none from source."""
+    try:
+        return json.loads((paths.BUNDLE / "whats_new.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def notes_since(seen: str, current: str | None = None) -> list[dict]:
+    """The releases after `seen` up to `current` (this version) that changed something you can see."""
+    upto = parse(current or __version__)
+    return [r for r in notes() if parse(seen) < parse(r["version"]) <= upto and r["items"]]
 
 
 def can_install() -> bool:

@@ -8,5 +8,6 @@ library/
 build/
 dist/
 notes.md
+whats_new.json
 CLAUDE.md
 .claude/

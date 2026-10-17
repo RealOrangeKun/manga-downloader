@@ -10,7 +10,9 @@ ICON = ROOT / "build" / "icon.ico"
 a = Analysis(
     [str(ROOT / "nyanga.py")],
     pathex=[str(ROOT)],
-    datas=[(str(ROOT / "assets" / d), f"assets/{d}") for d in ("fonts", "icons")],  # not the README pictures
+    datas=[(str(ROOT / "assets" / d), f"assets/{d}") for d in ("fonts", "icons")]  # not the README pictures
+    # the What's new notes, written by scripts/next_version.py in the release workflow
+    + ([(str(ROOT / "whats_new.json"), ".")] if (ROOT / "whats_new.json").exists() else []),
     excludes=["tkinter"],
 )
 # Qt plugins drag in QML, Quick, the virtual keyboard and PDF; the app uses none of them.

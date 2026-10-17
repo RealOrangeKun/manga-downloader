@@ -104,8 +104,9 @@ That's the only time you install it ✧
 
 When a new version is out, a card pops up with **Update now**. It downloads the new version,
 installs it and reopens by itself. Your settings and library are kept (they live in
-`%APPDATA%\Nyanga`). Curious what changed? Click the version at the bottom left for that
-version's notes, or see the whole [changelog](CHANGELOG.md).
+`%APPDATA%\Nyanga`). The first time it opens after an update, a **What's new** window lists
+what changed since your last version, in plain words. Want to read it again? Click the version
+at the bottom left, or see the whole [changelog](CHANGELOG.md).
 
 Pressed **Later**? A button waits at the top right. While an update downloads with the card
 closed, that spot shows the delivery cat and how far along it is:
@@ -214,7 +215,8 @@ After the first time, only the last line is needed.
 - To add a site, write a class like `FanFox` in `core.py` with `url_re`, `search()`, `info()`,
   `page_urls()` and `image()`, and add it to `SITES`. It then shows up as a source to search.
 - Commit messages are [conventional commits](https://www.conventionalcommits.org) (`fix:`,
-  `feat:`, `docs:`...). They decide the next version and become the release notes.
+  `feat:`, `docs:`...). They decide the next version and become the release notes; the subject and body also show
+  up in the app's What's new window, so write them for someone who's never seen the code.
 - Please follow the [code of conduct](CODE_OF_CONDUCT.md) ♡
 
 ## ✿ Credits

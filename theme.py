@@ -120,6 +120,11 @@ QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selec
     background: $selection; color: $accent_soft;
 }
 QFrame#toast { background: $chip; border-radius: 13px; }
+QDialog#whatsNew { background: $bg; }
+QFrame#noteItem { background: $card; border: 1px solid $border; border-radius: 14px; }
+QLabel#noteSection { font-size: 15px; font-weight: 700; color: $accent; padding-top: 4px; }
+QLabel#noteTitle { font-size: 14px; font-weight: 600; }
+QLabel#noteDetail { color: $muted; font-size: 13px; }
 QFrame#notify { background: $card; border: 2px solid $border; border-radius: 22px; }
 QFrame#updatePill {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary_a, stop:1 $primary_b);

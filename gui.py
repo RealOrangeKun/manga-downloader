@@ -12,13 +12,14 @@ import sys
 import threading
 import time
 from dataclasses import asdict, dataclass, fields
+from datetime import date
 from pathlib import Path
 
 import requests
 from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+    QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
     QMessageBox, QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -81,6 +82,7 @@ class Settings:
     theme: str = theme.SYSTEM
     default_source: str = core.SITES[0].name
     files_per_page: int = 20
+    seen_version: str = ""  # the version last opened, to show What's new once after an update
 
     @staticmethod
     def path() -> Path:
@@ -1746,6 +1748,7 @@ class SettingsPage(QWidget):
             keep_temp=self.keep_temp.isChecked(),
             theme=self.theme.currentData(),
             default_source=self.source.currentData(),
+            seen_version=self.settings.seen_version,
         )
 
     def _toast(self, text: str, error: bool = False) -> None:
@@ -2177,6 +2180,79 @@ class Notification(QWidget):
         super().leaveEvent(event)
 
 
+class WhatsNew(QDialog):
+    """The changes in one or more releases, in plain words, grouped into new things, fixes and so on."""
+
+    SECTIONS = {"breaking": "Heads up: this works a bit differently", "feat": "✧  New things",
+                "fix": "♡  Fixed", "perf": "✿  Faster"}
+
+    def __init__(self, parent: QWidget, releases: list[dict], subtitle: str):
+        super().__init__(parent, objectName="whatsNew")
+        self.setWindowTitle("What's new")
+        self.setFixedWidth(580)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(28, 22, 28, 22)
+        outer.setSpacing(6)
+        self.cat = CatLoader(lambda: CURRENT["mode"], (100, 80), celebrate=True)
+        self.cat.start()
+        outer.addWidget(self.cat, 0, Qt.AlignHCenter)
+        outer.addWidget(label("What's new ✧", "h1"), 0, Qt.AlignHCenter)
+        sub = label(subtitle, "hint", wrap=True)
+        sub.setAlignment(Qt.AlignCenter)
+        outer.addWidget(sub)
+        outer.addSpacing(10)
+
+        body = QWidget()
+        col = QVBoxLayout(body)
+        col.setContentsMargins(0, 0, 8, 0)
+        col.setSpacing(8)
+        for release in releases:
+            if len(releases) > 1:
+                day = date.fromisoformat(release["date"])
+                col.addSpacing(6)
+                col.addWidget(label(f"Version {release['version']}  ·  {day:%B} {day.day}, {day.year}", "h2"))
+            kind = None
+            for item in release["items"]:
+                if item["kind"] != kind:
+                    kind = item["kind"]
+                    col.addSpacing(4)
+                    col.addWidget(label(self.SECTIONS.get(kind, "Other changes"), "noteSection"))
+                col.addWidget(self._item(item))
+        col.addStretch(1)
+        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+
+        outer.addSpacing(10)
+        ok = QPushButton("Got it ♡", objectName="primary")
+        ok.setCursor(Qt.PointingHandCursor)
+        ok.clicked.connect(self.accept)
+        outer.addWidget(ok, 0, Qt.AlignHCenter)
+        body.adjustSize()
+        self.resize(self.width(), min(self.sizeHint().height() + body.sizeHint().height(), 680))
+
+    @staticmethod
+    def _item(item: dict) -> QFrame:
+        frame = QFrame(objectName="noteItem")
+        box = QVBoxLayout(frame)
+        box.setContentsMargins(14, 10, 14, 11)
+        box.setSpacing(4)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        title = label(item["title"], "noteTitle", wrap=True)
+        top.addWidget(title, 1)
+        if item["area"]:
+            top.addWidget(label(item["area"], "chip"), 0, Qt.AlignTop)
+        box.addLayout(top)
+        detail = label(item["detail"], "noteDetail", wrap=True)
+        detail.setVisible(bool(item["detail"]))
+        box.addWidget(detail)
+        for w in (title, detail):
+            w.setTextFormat(Qt.PlainText)  # commit text, not markup
+        return frame
+
+
 class MascotLogo(QWidget):
     """The sidebar cat. Click it and it hops, squishing a little when it takes off and lands."""
     clicked = Signal()
@@ -2290,6 +2366,7 @@ class MainWindow(QWidget):
         self.setWindowTitle("Nyanga")
         self.setWindowIcon(theme.app_icon())
         self.resize(1120, 840)
+        had_data = Settings.path().exists() or (paths.DATA / "library").exists()  # before this run makes any
         self.settings = Settings.load()
         CURRENT["mode"] = self._resolve(self.settings.theme)
 
@@ -2360,7 +2437,7 @@ class MainWindow(QWidget):
         version = QPushButton(f"version {__version__}", objectName="version")
         version.setCursor(Qt.PointingHandCursor)
         version.setToolTip("What's new in this version ✧")
-        version.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(updater.notes_url())))
+        version.clicked.connect(self._show_all_notes)
         sl.addWidget(version, 0, Qt.AlignLeft)
 
         layout.addWidget(side)
@@ -2393,6 +2470,31 @@ class MainWindow(QWidget):
         if hasattr(hints, "colorSchemeChanged"):  # Qt 6.5+: follow the system switching light/dark
             hints.colorSchemeChanged.connect(lambda *_: self.apply_theme(self.settings.theme))
         self.apply_theme(self.settings.theme)
+        QTimer.singleShot(500, lambda: self._greet_update(had_data))
+
+    def _greet_update(self, had_data: bool) -> None:
+        """After an update, shows once what changed since the version last opened."""
+        seen = self.settings.seen_version
+        if not any(updater.parse(__version__)) or seen == __version__:
+            return  # running from source, or nothing new since last time
+        if seen:
+            releases = updater.notes_since(seen)
+        else:  # first open of a fresh install (nothing to show), or an update from before this screen existed
+            releases = [r for r in updater.notes_since("0.0.0") if r["version"] == __version__] if had_data else []
+        self.settings.seen_version = __version__
+        try:
+            self.settings.save()
+        except OSError:
+            pass  # shows again next time, no harm
+        if releases:
+            WhatsNew(self, releases, f"Nyanga just updated to version {__version__}. Here's what changed ♡").exec()
+
+    def _show_all_notes(self) -> None:
+        releases = updater.notes_since("0.0.0")
+        if not releases:  # running from source: nothing bundled, so show the changelog online
+            QDesktopServices.openUrl(QUrl(updater.notes_url()))
+            return
+        WhatsNew(self, releases, f"You're on version {__version__}. Every update so far, newest first ♡").exec()
 
     @staticmethod
     def _resolve(choice: str) -> str:
