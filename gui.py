@@ -1155,6 +1155,8 @@ class SettingsPage(QWidget):
         form.addRow("Default format", self.fmt)
         self.per_file = spin(minimum=1, maximum=999)
         form.addRow("Chapters per file", with_hint(self.per_file, "Used when a site has no volume numbers for a title."))
+        self.per_page = spin(minimum=5, maximum=500)
+        form.addRow("Files per page", with_hint(self.per_page, "How many files the Download page lists at once."))
         bl.addLayout(form)
         col.addWidget(box)
 
@@ -1224,7 +1226,7 @@ class SettingsPage(QWidget):
             w.textChanged.connect(self._update_dirty)
         for w in (self.theme, self.source, self.fmt, self.mode):
             w.currentIndexChanged.connect(self._update_dirty)
-        for w in (self.per_file, self.workers, self.delay):
+        for w in (self.per_file, self.per_page, self.workers, self.delay):
             w.valueChanged.connect(self._update_dirty)
         self.keep_temp.toggled.connect(self._update_dirty)
         self._update_dirty()
@@ -1235,6 +1237,7 @@ class SettingsPage(QWidget):
         self.keep_temp.setChecked(s.keep_temp)
         self.fmt.setCurrentIndex(max(0, self.fmt.findData(s.default_format)))
         self.per_file.setValue(s.chapters_per_file)
+        self.per_page.setValue(s.files_per_page)
         self.workers.setValue(s.workers)
         self.mode.setCurrentIndex(max(0, self.mode.findData(s.download_mode)))
         self.theme.setCurrentIndex(max(0, self.theme.findData(s.theme)))
@@ -1251,6 +1254,7 @@ class SettingsPage(QWidget):
             request_delay=round(self.delay.value(), 1),
             default_format=self.fmt.currentData(),
             chapters_per_file=self.per_file.value(),
+            files_per_page=self.per_page.value(),
             keep_temp=self.keep_temp.isChecked(),
             theme=self.theme.currentData(),
             default_source=self.source.currentData(),
