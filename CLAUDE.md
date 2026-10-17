@@ -120,7 +120,8 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 - New colors go in both palettes in `theme.py`; use `theme.color(mode, name)` rather than
   hard-coded colors so light/dark both work.
 - New settings: add a field to the `Settings` dataclass (old `settings.json` files without it
-  must still load) and a row on `SettingsPage`.
+  must still load) and a row on `SettingsPage`. If the Download page shows it too, handle it in
+  `DownloadPage.apply_defaults` so a saved change follows through to fields the user didn't edit.
 - `settings.json`, `library/`, `downloads/`, `.manga-tmp/` are git-ignored user data.
 - Match the existing style: `from __future__ import annotations`, type hints, short module
   docstrings, sparse comments.

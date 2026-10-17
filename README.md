@@ -147,6 +147,10 @@ Every manga you've downloaded gets a card with its cover, how much of the series
 - Default source: the site the Download page searches unless you pick another.
 - Default download folder and temp folder, and whether to keep temp files.
 - Default format and chapters per file.
+- Files per page: how many files the Download page lists at once.
+- Change something and **Save** or **Undo** it before leaving the page. Saving new defaults
+  also updates a manga that's open on the Download page, except for the fields you changed
+  there yourself.
 - **Files at once**: how many files are made in parallel. `1` does one at a time.
 - **Run downloads on**: threads (recommended) or separate processes. Downloading mostly waits
   on the network, so processes rarely help; building files uses separate cores either way.

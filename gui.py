@@ -761,7 +761,24 @@ class DownloadPage(QWidget):
         """Load a title; with action "continue" or "retry", also start downloading what's left or what failed."""
         if action != "open":
             self._after_fetch = lambda: self._resume(action == "retry")
-        self._fetch()
+        self._fetch(url)
+
+    def apply_defaults(self, old: Settings) -> None:
+        """After the settings were saved: fields still on the old default follow the new one, edited ones stay."""
+        s = self.settings
+        if self.source.currentData() == old.default_source:
+            self.source.setCurrentIndex(max(0, self.source.findData(s.default_source)))
+        if s.files_per_page != old.files_per_page:  # stay on the page with the file that was at the top
+            self._show_page(self.page * old.files_per_page // s.files_per_page)
+        if not self.info or self.running:
+            return
+        if self.fmt.currentData() == old.default_format:
+            self.fmt.setCurrentIndex(max(0, self.fmt.findData(s.default_format)))
+        if self.save_to.text().strip() == old.download_dir:
+            self.save_to.setText(s.download_dir)
+        top = self.per_file.maximum()
+        if self.per_file.value() == min(old.chapters_per_file, top):
+            self.per_file.setValue(min(s.chapters_per_file, top))
 
     def _resume(self, only_failed: bool) -> None:
         entry = self.history.get(self.key) or {}
@@ -1073,7 +1090,7 @@ class DownloadPage(QWidget):
 
 
 class SettingsPage(QWidget):
-    changed = Signal()
+    changed = Signal(object)  # the settings as they were before saving
 
     def __init__(self, settings: Settings):
         super().__init__(objectName="page")
@@ -1240,6 +1257,7 @@ class SettingsPage(QWidget):
             b.setEnabled(self.dirty())
 
     def _save(self) -> None:
+        old = Settings(**asdict(self.settings))
         # Update in place: the download page holds the same Settings object.
         for f in fields(Settings):
             setattr(self.settings, f.name, getattr(self._form(), f.name))
@@ -1249,7 +1267,7 @@ class SettingsPage(QWidget):
         except OSError as e:
             self._toast(f"Could not save: {e}", error=True)
         self._update_dirty()
-        self.changed.emit()
+        self.changed.emit(old)
 
 
 # --------------------------------------------------------------------------- window
@@ -1716,7 +1734,7 @@ class MainWindow(QWidget):
         self.library = LibraryPage(self.settings, self.history)
         self.library.open_requested.connect(self._open_from_library)
         self.settings_page = SettingsPage(self.settings)
-        self.settings_page.changed.connect(lambda: self.apply_theme(self.settings.theme))
+        self.settings_page.changed.connect(self._settings_saved)
         for page in (self.download, self.library, self.settings_page):
             self.stack.addWidget(page)
         nav = QButtonGroup(self)
@@ -1819,6 +1837,10 @@ class MainWindow(QWidget):
             pass  # the toggle still works for this session
         self.settings_page._update_dirty()
         self.apply_theme(self.settings.theme)
+
+    def _settings_saved(self, old: Settings) -> None:
+        self.apply_theme(self.settings.theme)
+        self.download.apply_defaults(old)
 
     def show_page(self, index: int) -> None:
         if self.stack.currentWidget() is self.settings_page and index != 2 and self.settings_page.dirty():
