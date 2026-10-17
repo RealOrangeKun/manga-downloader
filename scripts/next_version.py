@@ -28,11 +28,58 @@ COMMIT_RE = re.compile(r"(?P<type>\w+)(?:\((?P<scope>[^)]*)\))?(?P<bang>!)?: (?P
 REPO = "https://github.com/nyanga-app/nyanga-app"
 SECTIONS = [("breaking", "Breaking changes"), ("feat", "New"), ("fix", "Fixes"), ("perf", "Faster")]
 TRAILER_RE = re.compile(r"^(co-authored-by|signed-off-by|refs?|closes|fixes):", re.I)
+# Older subjects were written as commands ("add ..."); these read as news instead. New commits
+# are written that way to begin with.
+HEADLINES = {
+    "install as a Windows app that updates itself": "made Nyanga a Windows app that installs and updates itself",
+    "import settings and library from the Python version":
+        "the installer can bring over your settings and library from the Python version",
+    "keep a put-off or running update at the top right": "a put-off or running update now stays at the top right",
+    "make the cat our mascot and app icon": "made the cat our mascot and app icon",
+    "size notification cards to fit their text": "notification cards now fit their text",
+    "rename the app to Nyanga": "renamed the app to Nyanga",
+    "click the version to see what's new": "clicking the version now shows what's new",
+    "search for a manga by name and pick it from the results":
+        "added search: find a manga by name and pick it from the results",
+    "add an undo button and stay on settings until changes are saved or undone":
+        "added an undo button, and settings stay open until changes are saved or undone",
+    "let the settings page scroll so the window fits smaller screens":
+        "the settings page now scrolls, so the window fits smaller screens",
+    "saved defaults update the manga open on the download page":
+        "saved defaults now update the manga open on the download page",
+    "split long file lists into pages": "long file lists are now split into pages",
+    "one button to select all or none": "added one button to select all or none",
+    "cat paw tick boxes instead of hearts": "swapped the hearts for cat paw tick boxes",
+    "choose how many files each page lists": "you can now choose how many files each page lists",
+    "sort the file list by tapping a column": "the file list now sorts when you tap a column",
+    "more ways to pick files: chapter range, shift-click, drag, quick picks and select page":
+        "added more ways to pick files: chapter range, shift-click, drag, quick picks and select page",
+    "open a manga's folder from its card": "added a button to open a manga's folder from its card",
+    "keep the sort arrow clear of long column titles": "the sort arrow no longer covers long column titles",
+    "add or remove a manga from the library with a button instead of on every lookup":
+        "manga are now added to or removed from the library with a button, not on every lookup",
+    "tap the sidebar cat to make it hop": "tapping the sidebar cat now makes it hop",
+    "check folders, search text and number fields before using them":
+        "folders, search text and number fields are now checked before they're used",
+    "browse more search results page by page": "added pages to browse more search results",
+    "keep download progress when a manga is removed, and offer to delete its files":
+        "removing a manga now keeps its download progress and offers to delete its files",
+    "pick files by volume range, and by chapter only for chapters not in a volume":
+        "files can now be picked by volume range, and by chapter only for chapters not in a volume",
+    "remake a volume's file when the site adds chapters to it":
+        "a volume's file is now remade when the site adds chapters to it",
+    "show what's new after an update": "what's new now shows after an update",
+    "check for updates at the app's new home": "updates are now checked at the app's new home",
+    "only show the sidebar greeting to thevi": "the sidebar greeting now only shows for thevi",
+    "add a linux version": "added a Linux version",
+    "add nyanga to your linux app menu": "you can now add Nyanga to your Linux app menu",
+    "put the back to results button on the left": "moved the back to results button to the left",
+}
 
 
 class Change:
     def __init__(self, scope: str | None, subject: str, body: str):
-        self.scope, self.subject, self.body = scope, subject, body
+        self.scope, self.subject, self.body = scope, HEADLINES.get(subject, subject), body
 
     def __str__(self) -> str:
         return f"{self.scope}: {self.subject}" if self.scope else self.subject
