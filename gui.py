@@ -835,10 +835,16 @@ class DownloadPage(QWidget):
             hl.addWidget(bar)
             self.table.setCellWidget(i, 5, holder)
         self.table.blockSignals(False)
-        # Show every row; the page itself scrolls, so the table never needs its own scrollbar.
-        rows_h = sum(self.table.rowHeight(i) for i in range(self.table.rowCount()))
-        self.table.setFixedHeight(self.table.horizontalHeader().height() + rows_h + 4)
-        self.first_n.setMaximum(len(self.groups))
+        self.order = list(range(len(self.groups)))
+        self.row_of = list(self.order)
+        self._apply_sort()
+        self._show_page(0)
+        self.anchor = None
+        numbers = [c.number for c in self.info.chapters]
+        for box in (self.range_from, self.range_to):
+            box.setRange(int(min(numbers)), math.ceil(max(numbers)))
+        self.range_from.setValue(self.range_from.minimum())
+        self.range_to.setValue(self.range_to.maximum())
         self._mark_history()
         self._fill_sizes()
         self._update_summary()

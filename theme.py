@@ -89,6 +89,7 @@ QPushButton {
 }
 QPushButton:hover { background: $button_hover; }
 QPushButton:disabled { background: $disabled_bg; color: $disabled_text; }
+QPushButton#pager { min-width: 34px; max-width: 34px; padding: 4px 0; font-size: 20px; font-weight: 700; }
 QPushButton#primary {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary_a, stop:1 $primary_b);
     color: white; padding: 11px 24px; font-size: 15px;
