@@ -156,7 +156,7 @@ QTableWidget {
     selection-background-color: $selection; selection-color: $text;
 }
 QTableWidget::item { padding: 4px 6px; }
-QHeaderView::section { background: $header; color: $muted; border: none; padding: 8px 6px; font-weight: 600; }
+QHeaderView::section { background: $header; color: $muted; border: none; padding: 8px 9px 8px 10px; font-weight: 600; }
 QProgressBar {
     background: $track; border: none; border-radius: 9px;
     text-align: center; color: $side_text; font-size: 11px; font-weight: 600;

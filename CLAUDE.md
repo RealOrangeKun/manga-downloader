@@ -115,8 +115,14 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 - Keep `core.py` and `builders.py` free of Qt: they are pickled/run in a process pool. Site
   objects must stay picklable (see `FanFox.__getstate__` dropping the thread-local session).
 - Worker threads talk to the GUI only through Qt signals (`Bridge`, `LibraryBridge`).
-- Adding a site: write a class like `FanFox` (`name`, `example`, `url_re`, chapter/image
-  fetching) and append it to `SITES` in `core.py`.
+- In `DownloadPage`, a "row" means a file's index in `self.groups`, not its table row: sorting
+  moves cells around. Reach cells with `_item(row, col)` and bars with `_bar(row)`; `order` and
+  `row_of` map between the two. (Qt's `moveSection` was tried and paints blank rows with paging.)
+  Paw clicks (toggle, shift-click, drag) go through `DownloadPage.eventFilter`; the check items
+  are deliberately not `ItemIsUserCheckable`.
+- Adding a site: write a class like `FanFox` (`name`, `example`, `url_re`, a `search(query,
+  limiter)` classmethod returning `SearchResult`s, chapter/image fetching) and append it to
+  `SITES` in `core.py`. It then shows up in the source pickers on the Download and Settings pages.
 - New colors go in both palettes in `theme.py`; use `theme.color(mode, name)` rather than
   hard-coded colors so light/dark both work.
 - New settings: add a field to the `Settings` dataclass (old `settings.json` files without it

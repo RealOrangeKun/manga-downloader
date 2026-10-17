@@ -14,7 +14,7 @@ from pathlib import Path
 
 import requests
 from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
@@ -231,6 +231,7 @@ def folder_row(edit: QLineEdit, title: str) -> QHBoxLayout:
 # --------------------------------------------------------------------------- download page
 
 
+HEADERS = ["", "File", "Chapters", "Count", "Size", "Progress"]
 LOADING = Qt.UserRole + 1  # item flag: draw the little cat instead of text
 
 
@@ -374,6 +375,9 @@ class DownloadPage(QWidget):
         self.site = None
         self.info: core.MangaInfo | None = None
         self.groups: list[core.Group] = []
+        self.bars: list[QProgressBar] = []  # one per file, in self.groups order
+        self.order: list[int] = []  # file shown in each table row
+        self.row_of: list[int] = []  # table row of each file
         self.cancel = threading.Event()
         self.running = False
         self.fractions: dict[int, float] = {}
@@ -506,7 +510,10 @@ class DownloadPage(QWidget):
         head.addWidget(self.summary_wait)
         tl.addLayout(head)
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["", "File", "Chapters", "Count", "Size", "Progress"])
+        self.table.setHorizontalHeader(SortHeader())
+        self.table.setHorizontalHeaderLabels(HEADERS)
+        for c, side in ((1, Qt.AlignLeft), (2, Qt.AlignLeft), (3, Qt.AlignRight), (4, Qt.AlignRight), (5, Qt.AlignCenter)):
+            self.table.horizontalHeaderItem(c).setTextAlignment(side | Qt.AlignVCenter)  # line up with the cells
         self.table.verticalHeader().hide()
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
@@ -516,6 +523,14 @@ class DownloadPage(QWidget):
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         hh = self.table.horizontalHeader()
+        # Tap a column to sort by it: ascending, descending, then back to normal. Right-click clears it.
+        self.sort: tuple[int, bool] | None = None  # (column, descending)
+        hh.setSectionsClickable(True)
+        hh.setCursor(Qt.PointingHandCursor)
+        hh.setToolTip("Tap to sort ✧ right-click to unsort")
+        hh.sectionClicked.connect(self._sort_clicked)
+        hh.setContextMenuPolicy(Qt.CustomContextMenu)
+        hh.customContextMenuRequested.connect(lambda *_: self._set_sort(None))
         hh.setSectionResizeMode(QHeaderView.ResizeToContents)
         hh.setSectionResizeMode(5, QHeaderView.Stretch)
         self.table.setItemDelegateForColumn(4, CatDelegate(self.table))
@@ -821,7 +836,9 @@ class DownloadPage(QWidget):
         self.meta_lbl.setText(f"{status}{len(self.info.chapters)} chapters  ·  "
                               f"{'volume numbers available' if vols else 'no volume numbers'}")
         self.table.blockSignals(True)
+        self.table.setRowCount(0)  # fresh rows; the old progress bars go with them
         self.table.setRowCount(len(self.groups))
+        self.bars = []
         for i, g in enumerate(self.groups):
             check = QTableWidgetItem()
             check.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
@@ -837,11 +854,8 @@ class DownloadPage(QWidget):
             self.table.setItem(i, 4, size)
             bar = QProgressBar(maximum=1000, value=0, format="")
             bar.setFixedHeight(18)
-            holder = QWidget()
-            hl = QHBoxLayout(holder)
-            hl.setContentsMargins(6, 0, 10, 0)
-            hl.addWidget(bar)
-            self.table.setCellWidget(i, 5, holder)
+            self.table.setCellWidget(i, 5, bar_holder(bar))
+            self.bars.append(bar)
         self.table.blockSignals(False)
         self.order = list(range(len(self.groups)))
         self.row_of = list(self.order)
@@ -856,6 +870,151 @@ class DownloadPage(QWidget):
         self._mark_history()
         self._fill_sizes()
         self._update_summary()
+
+    def _sort_clicked(self, column: int) -> None:
+        if not self.sort or self.sort[0] != column:
+            self._set_sort((column, False))
+        elif not self.sort[1]:
+            self._set_sort((column, True))
+        else:
+            self._set_sort(None)
+
+    def _set_sort(self, sort: tuple[int, bool] | None) -> None:
+        self.sort = sort
+        self.table.horizontalHeader().sort = sort
+        self.table.horizontalHeader().viewport().update()
+        self._apply_sort()
+        self._show_page(0)
+
+    def _sort_key(self, column: int, row: int):
+        group = self.groups[row]
+        if column == 0:
+            return self._item(row, 0).checkState() != Qt.Checked  # ticked first
+        if column in (3, 4):
+            return len(group.chapters)  # sizes are estimated from the chapter count
+        if column == 5:
+            bar = self._bar(row)
+            return -1 if bar.property("state") == core.FAILED else bar.value()
+        return row  # File and Chapters: the normal order
+
+    def _apply_sort(self) -> None:
+        """Move each file's cells to its sorted table row. Elsewhere a "row" is the file's index in
+        self.groups, whatever its place on screen; self.order and self.row_of map between the two."""
+        order = list(range(len(self.groups)))
+        if self.sort:
+            column, descending = self.sort
+            order.sort(key=lambda g: self._sort_key(column, g), reverse=descending)
+        if order == self.order:
+            return
+        cells = {g: [self.table.takeItem(r, c) for c in range(5)] for r, g in enumerate(self.order)}
+        holders = [bar_holder(self.bars[g]) for g in order]  # takes the bars out of their old cells first
+        self.table.blockSignals(True)
+        for r, g in enumerate(order):
+            for c, item in enumerate(cells[g]):
+                self.table.setItem(r, c, item)
+            self.table.setCellWidget(r, 5, holders[r])
+        self.table.blockSignals(False)
+        self.order = order
+        self.row_of = [0] * len(order)
+        for r, g in enumerate(order):
+            self.row_of[g] = r
+
+    def _item(self, row: int, column: int) -> QTableWidgetItem:
+        """The cell of file `row` (an index into self.groups), wherever sorting put it."""
+        return self.table.item(self.row_of[row], column)
+
+    def _show_page(self, page: int) -> None:
+        """Show one page of files; the rest stay in the table, just hidden."""
+        size = self.settings.files_per_page
+        pages = max(1, -(-self.table.rowCount() // size))
+        self.page = min(max(0, page), pages - 1)
+        first = self.page * size
+        shown = range(first, min(first + size, self.table.rowCount()))
+        for i in range(self.table.rowCount()):
+            self.table.setRowHidden(i, i not in shown)
+        last = first + len(shown)
+        self.page_lbl.setText(f"Page {self.page + 1} of {pages}  ·  files {first + 1}–{last}")
+        self.prev_btn.setEnabled(self.page > 0)
+        self.next_btn.setEnabled(self.page < pages - 1)
+        for w in (self.prev_btn, self.page_lbl, self.next_btn):
+            w.setVisible(pages > 1)
+        # Fit the shown rows exactly; the page itself scrolls, so the table never needs its own scrollbar.
+        rows_h = sum(self.table.rowHeight(i) for i in shown)
+        self.table.setFixedHeight(self.table.horizontalHeader().height() + rows_h + 4)
+        if self.groups:
+            self._update_summary()  # the Select page button follows the page
+
+    def _toggle_all(self) -> None:
+        everything = len(self._checked_rows()) == self.table.rowCount()
+        self._check(lambda i: not everything)
+
+    def _page_files(self) -> list[int]:
+        return [self.order[r] for r in range(self.table.rowCount()) if not self.table.isRowHidden(r)]
+
+    def _toggle_page(self) -> None:
+        files = self._page_files()
+        self._set_checks(files, not all(self._ticked(i) for i in files))
+
+    def _select_range(self) -> None:
+        low, high = sorted((self.range_from.value(), self.range_to.value()))
+        # high + 1 so "to 10" includes 10.5; a file counts if any of its chapters is in the range
+        self._check(lambda i: any(low <= c.number < high + 1 for c in self.groups[i].chapters))
+
+    def _ticked(self, row: int) -> bool:
+        return self._item(row, 0).checkState() == Qt.Checked
+
+    def _set_checks(self, rows, ticked: bool) -> None:
+        self.table.blockSignals(True)
+        for i in rows:
+            self._item(i, 0).setCheckState(Qt.Checked if ticked else Qt.Unchecked)
+        self.table.blockSignals(False)
+        self._update_summary()
+
+    def eventFilter(self, obj, event) -> bool:
+        """Paws: click to toggle, shift-click to set everything since the last click, drag to paint."""
+        if obj is not self.table.viewport() or self.running or not self.groups:
+            return super().eventFilter(obj, event)
+        kind = event.type()
+        if kind in (QEvent.MouseButtonPress, QEvent.MouseButtonDblClick) and event.button() == Qt.LeftButton:
+            pos = event.position().toPoint()
+            row = self.table.rowAt(pos.y())
+            if row < 0 or self.table.columnAt(pos.x()) != 0:
+                return super().eventFilter(obj, event)
+            file = self.order[row]
+            if event.modifiers() & Qt.ShiftModifier and self.anchor is not None:
+                low, high = sorted((self.row_of[self.anchor], row))
+                self._set_checks([self.order[r] for r in range(low, high + 1)], self._ticked(self.anchor))
+            else:
+                self.drag_state = not self._ticked(file)
+                self.anchor = file
+                self._set_checks([file], self.drag_state)
+            return True
+        if kind == QEvent.MouseMove and self.drag_state is not None:
+            row = self.table.rowAt(event.position().toPoint().y())
+            if row >= 0 and self._ticked(self.order[row]) != self.drag_state:
+                self._set_checks([self.order[row]], self.drag_state)
+            return True
+        if kind == QEvent.MouseButtonRelease and self.drag_state is not None:
+            self.drag_state = None
+            return True
+        return super().eventFilter(obj, event)
+
+    def _update_smart(self) -> None:
+        """Counts for the New / Not downloaded / Failed quick picks."""
+        entry = self.history.get(self.key) or {}
+        downloaded, failed = entry.get("downloaded", {}), set(entry.get("failed", []))
+        self.smart = {"new": [], "missing": [], "failed": []}
+        for i, g in enumerate(self.groups):
+            keys = group_keys(g)
+            if self.new_keys & set(keys):
+                self.smart["new"].append(i)
+            if not all(k in downloaded for k in keys):
+                self.smart["missing"].append(i)
+            if failed & set(keys):
+                self.smart["failed"].append(i)
+        for kind, name in (("new", "New ✧"), ("missing", "Not downloaded"), ("failed", "Failed")):
+            self.smart_btns[kind].setText(f" {name} ({len(self.smart[kind])})")
+            self.smart_btns[kind].setEnabled(bool(self.smart[kind]) and not self.running)
 
     def _mark_history(self) -> None:
         """Show what is already downloaded, failed last time or new, and untick finished files."""
@@ -873,7 +1032,7 @@ class DownloadPage(QWidget):
                 bar.setValue(1000)
                 bar.setFormat("Downloaded ✓")
                 state = core.DONE
-                self.table.item(i, 0).setCheckState(Qt.Unchecked)
+                self._item(i, 0).setCheckState(Qt.Unchecked)
             elif have:
                 bar.setValue(int(have / len(keys) * 1000))
                 bar.setFormat(f"{have} of {len(keys)} chapters downloaded")
@@ -887,15 +1046,15 @@ class DownloadPage(QWidget):
         self.table.blockSignals(False)
 
     def _bar(self, row: int) -> QProgressBar:
-        return self.table.cellWidget(row, 5).findChild(QProgressBar)
+        return self.bars[row]
 
     def _checked_rows(self) -> list[int]:
-        return [i for i in range(self.table.rowCount()) if self.table.item(i, 0).checkState() == Qt.Checked]
+        return [i for i in range(len(self.groups)) if self._item(i, 0).checkState() == Qt.Checked]
 
     def _check(self, rule) -> None:
         self.table.blockSignals(True)
-        for i in range(self.table.rowCount()):
-            self.table.item(i, 0).setCheckState(Qt.Checked if rule(i) else Qt.Unchecked)
+        for i in range(len(self.groups)):
+            self._item(i, 0).setCheckState(Qt.Checked if rule(i) else Qt.Unchecked)
         self.table.blockSignals(False)
         self._update_summary()
 
@@ -934,7 +1093,7 @@ class DownloadPage(QWidget):
         """Estimated download size of each file: the average chapter size times its chapters."""
         self.table.blockSignals(True)
         for i, g in enumerate(self.groups):
-            item = self.table.item(i, 4)
+            item = self._item(i, 4)
             item.setData(LOADING, self.estimating)
             if self.estimating:
                 text = ""
