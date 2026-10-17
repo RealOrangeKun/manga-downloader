@@ -236,6 +236,9 @@ _ICONS = {
                '<rect x="9.8" y="5" width="4.4" height="14.6" rx="1.4" fill="none" stroke="COLOR" stroke-width="2.1"/>'
                '<path d="M16 7.6l3.1-.9 2.9 12-3.1.9z" fill="none" stroke="COLOR" stroke-width="2.1" stroke-linejoin="round"/>'
                '<path d="M5.8 13.2s-1.4-.8-1.4-1.8c0-.5.4-.8.8-.8.3 0 .5.2.6.4.1-.2.3-.4.6-.4.4 0 .8.3.8.8 0 1-1.4 1.8-1.4 1.8z" fill="COLOR"/>',
+    "undo": '<path d="M9 5.5L4.8 9.7 9 13.9" fill="none" stroke="COLOR" stroke-width="2.4" stroke-linecap="round" '
+            'stroke-linejoin="round"/><path d="M5.5 9.7h8.3a5 5 0 0 1 0 10H10" fill="none" stroke="COLOR" '
+            'stroke-width="2.4" stroke-linecap="round"/>',
     "close": '<path d="M7 7l10 10M17 7L7 17" stroke="COLOR" stroke-width="2.6" stroke-linecap="round"/>',
     "refresh": '<path d="M19 12a7 7 0 1 1-2.05-4.95" fill="none" stroke="COLOR" stroke-width="2.4" '
                'stroke-linecap="round"/><path d="M19.2 4.5v3.6h-3.6" fill="none" stroke="COLOR" stroke-width="2.4" '

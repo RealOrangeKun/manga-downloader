@@ -1160,16 +1160,20 @@ class SettingsPage(QWidget):
         self.saved.hide()
         reset = set_icon(QPushButton(" Reset to defaults"), "refresh")
         reset.clicked.connect(lambda: self._show(Settings()))
+        self.undo_btn = set_icon(QPushButton(" Undo"), "undo")
+        self.undo_btn.setToolTip("Go back to the saved settings")
+        self.undo_btn.clicked.connect(lambda: self._show(self.settings))
         self.save_btn = set_icon(QPushButton(" Save", objectName="primary"), "heart", "white")
         self.save_btn.clicked.connect(self._save)
         row.addWidget(self.saved)
         row.addStretch(1)
         row.addWidget(reset)
+        row.addWidget(self.undo_btn)
         row.addWidget(self.save_btn)
         col.addLayout(row)
         col.addStretch(1)
         self._show(settings)
-        # Save is only clickable while the form differs from what is saved.
+        # Save and Undo are only clickable while the form differs from what is saved.
         for w in (self.download_dir, self.temp_dir):
             w.textChanged.connect(self._update_dirty)
         for w in (self.theme, self.source, self.fmt, self.mode):
@@ -1215,8 +1219,15 @@ class SettingsPage(QWidget):
         self.saved.show()
         QTimer.singleShot(2500, self.saved.hide)
 
+    def dirty(self) -> bool:
+        return self._form() != self.settings
+
+    def nag(self) -> None:
+        self._toast("Save or undo your changes first ♡", error=True)
+
     def _update_dirty(self, *_) -> None:
-        self.save_btn.setEnabled(self._form() != self.settings)
+        for b in (self.save_btn, self.undo_btn):
+            b.setEnabled(self.dirty())
 
     def _save(self) -> None:
         # Update in place: the download page holds the same Settings object.
@@ -1800,6 +1811,10 @@ class MainWindow(QWidget):
         self.apply_theme(self.settings.theme)
 
     def show_page(self, index: int) -> None:
+        if self.stack.currentWidget() is self.settings_page and index != 2 and self.settings_page.dirty():
+            self.nav_buttons[2].setChecked(True)  # stay until the changes are saved or undone
+            self.settings_page.nag()
+            return
         self.nav_buttons[index].setChecked(True)
         self.stack.setCurrentIndex(index)
         if self.stack.currentWidget() is self.library:
