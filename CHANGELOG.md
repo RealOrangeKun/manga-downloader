@@ -2,7 +2,12 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
-## [1.5.2](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.2) (2026-10-17)
+## [1.6.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.6.0) (2026-10-17)
+
+### New
+- download: search results can now show as a list or a grid of covers, in five sizes
+
+## [1.5.2](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.2) (2026-10-18)
 
 ### Fixes
 - what's new now reads as news instead of commands
