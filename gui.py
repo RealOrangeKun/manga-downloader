@@ -1078,9 +1078,16 @@ class SettingsPage(QWidget):
     def __init__(self, settings: Settings):
         super().__init__(objectName="page")
         self.settings = settings
-        col = QVBoxLayout(self)
-        col.setContentsMargins(32, 28, 32, 28)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        body = QWidget()
+        col = QVBoxLayout(body)
+        col.setContentsMargins(32, 28, 32, 16)
         col.setSpacing(18)
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
         col.addWidget(label("Settings ✿", "h1"))
 
         look, ll = card()
@@ -1170,8 +1177,11 @@ class SettingsPage(QWidget):
         row.addWidget(reset)
         row.addWidget(self.undo_btn)
         row.addWidget(self.save_btn)
-        col.addLayout(row)
         col.addStretch(1)
+        bottom = QWidget()
+        bottom.setLayout(row)
+        row.setContentsMargins(32, 4, 32, 22)  # stays in view while the page scrolls
+        outer.addWidget(bottom)
         self._show(settings)
         # Save and Undo are only clickable while the form differs from what is saved.
         for w in (self.download_dir, self.temp_dir):
