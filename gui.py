@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import html
 import json
 import math
@@ -58,6 +59,14 @@ def swap_icon(button: QPushButton, name: str) -> None:
 def _paint_icon(button: QPushButton, name: str, color_key: str) -> None:
     color = "#ffffff" if color_key == "white" else theme.color(CURRENT["mode"], color_key)
     button.setIcon(theme.icon(name, color))
+
+
+def greeted() -> bool:
+    """The sidebar says hi only to the friend Nyanga was made for (their Windows user name)."""
+    try:
+        return getpass.getuser().casefold() == "thevi"
+    except Exception:  # no user name to be found
+        return False
 
 
 def repolish(widget: QWidget) -> None:
@@ -2433,7 +2442,8 @@ class MainWindow(QWidget):
         self.toggle.clicked.connect(self._toggle_theme)
         sl.addWidget(self.toggle)
         sl.addSpacing(10)
-        sl.addWidget(label("HI LIL GOMIEE!!", "greeting"))
+        if greeted():
+            sl.addWidget(label("HI LIL GOMIEE!!", "greeting"))
         version = QPushButton(f"version {__version__}", objectName="version")
         version.setCursor(Qt.PointingHandCursor)
         version.setToolTip("What's new in this version ✧")
