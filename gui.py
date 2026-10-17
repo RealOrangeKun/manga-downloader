@@ -17,7 +17,7 @@ from datetime import date
 from pathlib import Path
 
 import requests
-from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
+from PySide6.QtCore import QBuffer, QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+import appmenu
 import core
 import paths
 import theme
@@ -1692,6 +1693,19 @@ class SettingsPage(QWidget):
         wl.addLayout(prow)
         col.addWidget(where)
 
+        if appmenu.available():  # only the Linux AppImage; Windows has its installer
+            menu, ml = card()
+            ml.addWidget(label("App menu", "pathTitle"))
+            mrow = QHBoxLayout()
+            self.menu_hint = label("", "hint", wrap=True)
+            mrow.addWidget(self.menu_hint, 1)
+            self.menu_btn = set_icon(QPushButton(), "heart")
+            self.menu_btn.clicked.connect(self._toggle_menu)
+            mrow.addWidget(self.menu_btn)
+            ml.addLayout(mrow)
+            col.addWidget(menu)
+            self._sync_menu()
+
         row = QHBoxLayout()
         self.saved = QFrame(objectName="toast")
         tl = QHBoxLayout(self.saved)
@@ -1729,6 +1743,37 @@ class SettingsPage(QWidget):
             w.valueChanged.connect(self._update_dirty)
         self.keep_temp.toggled.connect(self._update_dirty)
         self._update_dirty()
+
+    def _sync_menu(self) -> None:
+        state = appmenu.state()
+        self.menu_btn.setEnabled(state != appmenu.THEIRS)
+        if state == appmenu.OURS:
+            swap_icon(self.menu_btn, "close")
+            self.menu_btn.setText(" Remove Nyanga from your app menu")
+            self.menu_hint.setText("Nyanga is in your app menu ✧")
+        elif state == appmenu.THEIRS:
+            swap_icon(self.menu_btn, "heart")
+            self.menu_btn.setText(" Already in your app menu ✧")
+            self.menu_hint.setText("Another app (like Gear Lever) added Nyanga to your menu, so it's all set.")
+        else:
+            swap_icon(self.menu_btn, "heart")
+            self.menu_btn.setText(" Add Nyanga to your app menu")
+            self.menu_hint.setText("Open Nyanga from your app menu like any other app, no need to find the file ♡")
+
+    def _toggle_menu(self) -> None:
+        try:
+            if appmenu.state() == appmenu.OURS:
+                appmenu.remove()
+                self._toast("Taken out of your app menu")
+            else:
+                buffer = QBuffer()
+                buffer.open(QBuffer.WriteOnly)
+                theme.app_pixmap(256).save(buffer, "PNG")
+                appmenu.add(bytes(buffer.data()))
+                self._toast("Added to your app menu ✧")
+        except OSError as e:
+            self._toast(f"Could not change the app menu: {e}", error=True)
+        self._sync_menu()
 
     def _show(self, s: Settings) -> None:
         self.download_dir.setText(s.download_dir)
@@ -2694,6 +2739,9 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("nyanga")
     app.setApplicationDisplayName("Nyanga")
+    appmenu.follow()
+    if desktop_id := appmenu.desktop_id():  # lets Linux docks match the window to its menu entry and icon
+        app.setDesktopFileName(desktop_id)
     app.setFont(theme.load_font())
     app.setWindowIcon(theme.app_icon())
     window = MainWindow()
