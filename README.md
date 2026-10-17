@@ -174,17 +174,13 @@ py -m venv .venv
 
 After the first time, only the last line is needed.
 
-## 🚀 Releases
+## 🔏 Before sharing it more widely
 
-Every push to `main` runs [the release workflow](.github/workflows/release.yml). It reads the
-commit messages since the last release ([conventional commits](https://www.conventionalcommits.org)):
-
-| Commit starts with | Example | New version |
-|---|---|---|
-| `fix:` or `perf:` | `fix: retry images that time out` | 1.0.0 → 1.0.1 |
-| `feat:` | `feat(library): sort by last read` | 1.0.1 → 1.1.0 |
-| `feat!:` or a `BREAKING CHANGE:` line | `feat!: new settings format` | 1.1.0 → 2.0.0 |
-| `docs:`, `chore:`, `ci:`, `refactor:`, `style:`, `test:` | `docs: fix typo` | no release |
+The installer isn't code-signed, so Windows SmartScreen shows "Windows protected your PC" with
+an unknown publisher the first time someone runs it from a browser download. The installed app
+and its automatic updates aren't flagged: only files downloaded through a browser are checked.
+That's fine for a few friends, but to hand it out to more people, sign the exe and installer in
+the release workflow:
 
 If there's a new version, it builds the exe with PyInstaller ([packaging/nyanga.spec](packaging/nyanga.spec)),
 wraps it in an Inno Setup installer ([packaging/installer.iss](packaging/installer.iss)), and publishes a
@@ -193,16 +189,10 @@ notes go into [CHANGELOG.md](CHANGELOG.md), which the workflow commits back as a
 The tag is the source of the version; `version.py` says `0.0.0-dev` in the repo and gets the
 real number during the build.
 
-To build locally on Windows: `pip install pyinstaller`, `python scripts/make_icon.py`,
-`pyinstaller packaging/nyanga.spec --noconfirm`, then `ISCC.exe /DAppVersion=1.2.3 packaging\installer.iss`.
+Even when signed, SmartScreen may warn for a while until the signature builds a reputation.
 
-## 🧶 Notes
+## 🧶 Contributing
 
-- **How the parallel part works**: downloads run on real OS threads; Python releases the GIL
-  while waiting on the network, so they run at the same time. Building files (EPUB slicing, PDF,
-  image conversion) is CPU work, so it runs in separate processes and can use several cores.
-- Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
-  the original strips; use a reader with a continuous-scroll mode for those.
 - Code layout: `core.py` (sites, rate limiting, download pipeline), `builders.py` (output
   formats), `gui.py` (the window), `loader.py` (the cats), `updater.py` (checks GitHub for new
   versions and installs them), `paths.py` (where assets and user data live, from source and in

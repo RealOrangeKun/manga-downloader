@@ -1,0 +1,40 @@
+Nyanga License
+
+Copyright (c) 2026 Youssef Tarek. All rights reserved.
+
+Nyanga's source code is public so people can read it, use the app and help improve it. It is
+not open source. "The Software" below means everything in this repository: code, the cat
+drawings, icons, images and documentation, except the bundled fonts in assets/fonts, which
+keep their own license (see assets/fonts/OFL.txt).
+
+1. You may:
+   a. download, install and use the official Nyanga releases and run the Software from source
+      for your own personal, non-commercial use;
+   b. read and study the source code;
+   c. fork this repository on GitHub and change your fork, but only to prepare contributions
+      (pull requests, patches or issues) to the official Nyanga repository at
+      https://github.com/RealOrangeKun/nyanga.
+
+2. You may not, without written permission from the copyright holder:
+   a. publish, distribute, sell, sublicense or host the Software or any modified version of
+      it, in source or compiled form;
+   b. release your own app, fork or project based on the Software or any substantial part of
+      it, under the Nyanga name or any other name;
+   c. use the Nyanga name, the cat mascot or the icons for any other project.
+
+3. Contributions. When you send a contribution to the official repository, you confirm that
+   you wrote it (or have the right to submit it), and you give the copyright holder a
+   perpetual, worldwide, irrevocable, royalty-free license to use, change, distribute and
+   relicense it as part of Nyanga. You keep the copyright of your contribution.
+
+4. Your permissions under this license end automatically if you break any of its terms.
+
+5. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+   PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+   LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH
+   THE SOFTWARE OR ITS USE. You are responsible for following the terms of the sites you
+   download from and the copyright of the manga you download.
+
+For any use not covered here, ask by opening an issue at
+https://github.com/RealOrangeKun/nyanga/issues.

@@ -89,6 +89,8 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 | `scripts/readme_screenshots.py` | Renders `assets/readme/screenshot-{light,dark}.png` from the real app, offscreen. |
 | `scripts/make_icon.py` | Draws `build/icon.ico` from the app icon in `theme.py`. |
 | `CHANGELOG.md` | Written by the release workflow; don't edit. |
+| `LICENSE` | Custom source-available license: use and contribute, no redistribution or forks as separate projects. Bundled fonts keep the OFL. |
+| `CODE_OF_CONDUCT.md` | Code of conduct, linked from the README's Contributing section. |
 
 ## Packaging and releases
 
