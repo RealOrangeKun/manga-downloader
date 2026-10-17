@@ -65,6 +65,7 @@ jobs:
         run: >
           gh release create v${{ steps.version.outputs.version }}
           dist/installer/Nyanga-Setup-${{ steps.version.outputs.version }}.exe
+          whats_new.json
           --title "v${{ steps.version.outputs.version }}"
           --notes-file notes.md
           --target ${{ github.sha }}
