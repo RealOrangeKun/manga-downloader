@@ -43,8 +43,7 @@ def render(mode: str, out: Path, data: Path) -> None:
     window.resize(*SIZE)
     window.show()
     page = window.download
-    page.url.setText(URL)
-    page._fetch()
+    page._fetch(URL)
     start = time.time()
 
     def poll() -> None:

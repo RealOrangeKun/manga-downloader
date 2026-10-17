@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -16,7 +17,7 @@ from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPro
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
-    QFormLayout, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
+    QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
     QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
@@ -68,6 +69,8 @@ class Settings:
     chapters_per_file: int = 10
     keep_temp: bool = False
     theme: str = theme.SYSTEM
+    default_source: str = core.SITES[0].name
+    files_per_page: int = 20
 
     @staticmethod
     def path() -> Path:
@@ -92,6 +95,9 @@ class Settings:
 
 class Bridge(QObject):
     """Carries results from worker threads back to the GUI thread."""
+    searched = Signal(int, object, str, list)  # search id, site class, query, SearchResults
+    search_failed = Signal(int, str)
+    cover_ready = Signal(int, int, object)  # search id, result index, image bytes (or None)
     fetched = Signal(object, object)  # site, MangaInfo
     fetch_failed = Signal(str)
     status = Signal(int, str, float, str)  # table row, state, fraction, message
@@ -234,6 +240,97 @@ class CatDelegate(QStyledItemDelegate):
             painter.restore()
 
 
+class ResultItem(QFrame):
+    """One search result: cover, title and a line about it. Click to open it."""
+    clicked = Signal()
+
+    def __init__(self, result: core.SearchResult):
+        super().__init__(objectName="result")
+        self.result = result
+        self.data: bytes | None = None
+        self.setCursor(Qt.PointingHandCursor)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 10, 14, 10)
+        row.setSpacing(14)
+        self.cover = QLabel()
+        self.cover.setFixedSize(54, 76)
+        self.set_cover(None)
+        row.addWidget(self.cover, 0, Qt.AlignTop)
+        text = QVBoxLayout()
+        text.setSpacing(3)
+        text.addWidget(label(result.title, "resultTitle", wrap=True))
+        meta = "  ·  ".join(x for x in (result.status, result.latest) if x)
+        if meta:
+            text.addWidget(label(meta, "meta", wrap=True))
+        if result.author:
+            text.addWidget(label(f"by {result.author}", "hint", wrap=True))
+        text.addStretch(1)
+        row.addLayout(text, 1)
+
+    def set_cover(self, data: bytes | None) -> None:
+        self.data = data
+        self.cover.setPixmap(rounded_pixmap(data, 54, 76, 10))
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+
+class SortHeader(QHeaderView):
+    """Column titles with room for a small sort arrow next to each, so sorting never shifts the text."""
+    ARROW = 16  # room kept in every column
+
+    def __init__(self):
+        super().__init__(Qt.Horizontal)
+        self.sort: tuple[int, bool] | None = None  # (column, descending)
+
+    def sectionSizeFromContents(self, index: int) -> QSize:
+        size = super().sectionSizeFromContents(index)
+        size.setWidth(size.width() + self.ARROW)
+        return size
+
+    def paintSection(self, painter, rect, index) -> None:
+        painter.save()
+        super().paintSection(painter, rect, index)
+        painter.restore()
+        if not self.sort or self.sort[0] != index:
+            return
+        item = self.model().headerData(index, Qt.Horizontal, Qt.TextAlignmentRole)
+        align = Qt.AlignmentFlag(int(item)) if item is not None else Qt.AlignCenter
+        text = self.model().headerData(index, Qt.Horizontal) or ""
+        font = QFont(self.font())
+        font.setWeight(QFont.DemiBold)  # as styled in theme.py
+        width = QFontMetrics(font).horizontalAdvance(text)
+        if align & Qt.AlignRight:  # 9 and 10: the section padding in theme.py
+            x = rect.right() - 9 - width - 12  # before the text
+        elif align & Qt.AlignLeft:
+            x = rect.left() + 10 + width + 4  # after the text
+        else:
+            x = rect.center().x() + width / 2 + 4 if text else rect.center().x() - 4
+        y = rect.center().y()
+        arrow = QPainterPath()
+        if self.sort[1]:  # descending: pointing down
+            arrow.moveTo(x, y - 2.5); arrow.lineTo(x + 8, y - 2.5); arrow.lineTo(x + 4, y + 3)
+        else:
+            arrow.moveTo(x, y + 2.5); arrow.lineTo(x + 8, y + 2.5); arrow.lineTo(x + 4, y - 3)
+        arrow.closeSubpath()
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(theme.color(CURRENT["mode"], "accent"), 1.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.setBrush(theme.color(CURRENT["mode"], "accent"))
+        painter.drawPath(arrow)
+        painter.restore()
+
+
+def bar_holder(bar: QProgressBar) -> QWidget:
+    """A progress bar with some room around it, for the table's last column."""
+    holder = QWidget()
+    hl = QHBoxLayout(holder)
+    hl.setContentsMargins(6, 0, 10, 0)
+    hl.addWidget(bar)
+    return holder
+
+
 def group_keys(group: core.Group) -> list[str]:
     return [chapter_key(c.number) for c in group.chapters]
 
@@ -249,6 +346,11 @@ class DownloadPage(QWidget):
         self.new_keys: set[str] = set()  # chapters that appeared since the title was last opened
         self._after_fetch = None  # what to do once a title opened from the library has loaded
         self.bridge = Bridge()
+        self.bridge.searched.connect(self._on_searched)
+        self.bridge.search_failed.connect(self._on_search_failed)
+        self.bridge.cover_ready.connect(self._on_cover)
+        self.search_id = 0  # results of older searches are ignored
+        self.results: list[ResultItem] = []
         self.bridge.fetched.connect(self._on_fetched)
         self.bridge.fetch_failed.connect(self._on_fetch_failed)
         self.bridge.status.connect(self._on_status)
@@ -285,17 +387,46 @@ class DownloadPage(QWidget):
         # find
         find, fl = card()
         row = QHBoxLayout()
-        self.url = QLineEdit(placeholderText="Paste a manga link, like https://fanfox.net/manga/<title>/")
-        self.url.returnPressed.connect(self._fetch)
-        self.fetch_btn = set_icon(QPushButton(" Find", objectName="primary"), "search", "white")
-        self.fetch_btn.clicked.connect(self._fetch)
-        row.addWidget(self.url, 1)
+        self.source = combo_box()
+        for site in core.SITES:
+            self.source.addItem(site.name, site.name)
+        self.source.setCurrentIndex(max(0, self.source.findData(settings.default_source)))
+        self.source.setToolTip("Where to search")
+        self.source.currentIndexChanged.connect(lambda *_: self._hint(self._idle_hint()))
+        self.query = QLineEdit(placeholderText="Type a manga name, like One Piece ✧")
+        self.query.returnPressed.connect(self._find)
+        self.fetch_btn = set_icon(QPushButton(" Search", objectName="primary"), "search", "white")
+        self.fetch_btn.clicked.connect(self._find)
+        row.addWidget(self.source)
+        row.addWidget(self.query, 1)
         row.addWidget(self.fetch_btn)
         fl.addLayout(row)
-        sites = ", ".join(s.name for s in core.SITES)
-        self.find_hint = label(f"Supported sites: {sites}", "hint")
-        fl.addWidget(self.find_hint)
+        hint_row = QHBoxLayout()
+        self.find_hint = label(self._idle_hint(), "hint", wrap=True)
+        hint_row.addWidget(self.find_hint, 1)
+        self.back_btn = set_icon(QPushButton(" Back to results"), "list")
+        self.back_btn.clicked.connect(self._show_results)
+        self.back_btn.hide()
+        hint_row.addWidget(self.back_btn)
+        fl.addLayout(hint_row)
         col.addWidget(find)
+
+        # search results
+        self.results_card, rl = card()
+        rhead = QHBoxLayout()
+        rhead.addWidget(label("Pick one ✧", "h2"))
+        rhead.addStretch(1)
+        self.results_count = label("", "meta")
+        rhead.addWidget(self.results_count)
+        rl.addLayout(rhead)
+        self.results_grid = QGridLayout()
+        self.results_grid.setHorizontalSpacing(12)
+        self.results_grid.setVerticalSpacing(12)
+        self.results_grid.setColumnStretch(0, 1)
+        self.results_grid.setColumnStretch(1, 1)
+        rl.addLayout(self.results_grid)
+        self.results_card.hide()
+        col.addWidget(self.results_card)
 
         # shown while a title is being looked up
         self.lookup_card, lk = card()
@@ -305,8 +436,10 @@ class DownloadPage(QWidget):
         lrow.addWidget(self.lookup_cat)
         ltext = QVBoxLayout()
         ltext.addStretch(1)
-        ltext.addWidget(label("Looking it up…", "h2"))
-        ltext.addWidget(label("Reading the chapter list and cover ✧", "hint"))
+        self.lookup_title = label("", "h2")
+        self.lookup_text = label("", "hint")
+        ltext.addWidget(self.lookup_title)
+        ltext.addWidget(self.lookup_text)
         ltext.addStretch(1)
         lrow.addLayout(ltext)
         lrow.addStretch(1)
@@ -411,7 +544,7 @@ class DownloadPage(QWidget):
         self.bar_cat = CatLoader(lambda: CURRENT["mode"], (62, 50))
         bl.addWidget(self.bar_cat)
         info = QVBoxLayout()
-        self.status_lbl = label("Paste a link to get started ♡", "meta")
+        self.status_lbl = label("Search for a manga to get started ♡", "meta")
         self.overall = QProgressBar(maximum=1000, textVisible=False)
         self.overall.setFixedHeight(12)
         status_row = QHBoxLayout()
@@ -445,19 +578,99 @@ class DownloadPage(QWidget):
 
     # ---- fetching
 
-    def _fetch(self) -> None:
-        url = self.url.text().strip()
-        site_cls = core.site_for(url)
-        if site_cls is None:
+    def _idle_hint(self) -> str:
+        return f"Searching {self.source.currentData()}. A link to a title works too ✧"
+
+    def _start_lookup(self, title: str, text: str) -> None:
+        self.lookup_title.setText(title)
+        self.lookup_text.setText(text)
+        self.fetch_btn.setEnabled(False)
+        self.results_card.hide()
+        self.back_btn.hide()
+        self.lookup_card.show()
+        self.lookup_cat.start()
+
+    def _find(self) -> None:
+        text = self.query.text().strip()
+        if not text:
+            self._hint("Type a manga name first ♡", error=True)
+            return
+        if core.site_for(text):
+            self._fetch(text)
+            return
+        if re.match(r"https?://", text):
             self._hint("That isn't a title link from a supported site: "
                        + ", ".join(s.example for s in core.SITES), error=True)
             return
-        self._hint("Looking it up…")
-        self.fetch_btn.setEnabled(False)
+        site_cls = core.site_named(self.source.currentData())
+        self.search_id += 1
+        sid = self.search_id
+        self._hint(f"Searching {site_cls.name}…")
+        self._start_lookup("Searching…", f"Asking {site_cls.name} for matches ✧")
+        limiter = core.RateLimiter(self.settings.request_delay)
+
+        def work() -> None:
+            try:
+                self.bridge.searched.emit(sid, site_cls, text, site_cls.search(text, limiter))
+            except Exception as e:
+                self.bridge.search_failed.emit(sid, str(e))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_search_failed(self, sid: int, message: str) -> None:
+        if sid == self.search_id:
+            self._on_fetch_failed(message)
+
+    def _on_searched(self, sid: int, site_cls, query: str, results: list) -> None:
+        if sid != self.search_id:
+            return
+        self._end_lookup()
+        self.fetch_btn.setEnabled(True)
+        for item in self.results:
+            item.deleteLater()
+        self.results = []
+        if not results:
+            self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✧", error=True)
+            return
+        self._hint(f"Found {len(results)} on {site_cls.name}. Pick the one you want ♡")
+        self.results_count.setText(f"{len(results)} {'match' if len(results) == 1 else 'matches'}")
+        for i, result in enumerate(results):
+            item = ResultItem(result)
+            item.clicked.connect(lambda r=result: self._pick(r))
+            self.results_grid.addWidget(item, i // 2, i % 2)
+            self.results.append(item)
         self.manga_card.hide()
         self.files_card.hide()
-        self.lookup_card.show()
-        self.lookup_cat.start()
+        self.results_card.show()
+        limiter = core.RateLimiter(self.settings.request_delay)
+
+        def covers() -> None:
+            site = site_cls("", limiter)
+            for i, result in enumerate(results):
+                if sid != self.search_id:
+                    return  # a newer search replaced these
+                self.bridge.cover_ready.emit(sid, i, site.cover(result.cover_url) if result.cover_url else None)
+
+        threading.Thread(target=covers, daemon=True).start()
+
+    def _on_cover(self, sid: int, index: int, data) -> None:
+        if sid == self.search_id and index < len(self.results):
+            self.results[index].set_cover(data)
+
+    def _pick(self, result: core.SearchResult) -> None:
+        if not self.running:
+            self._fetch(result.url)
+
+    def _show_results(self) -> None:
+        self.back_btn.hide()
+        self.results_card.show()
+
+    def _fetch(self, url: str) -> None:
+        site_cls = core.site_for(url)
+        self._hint("Looking it up…")
+        self.manga_card.hide()
+        self.files_card.hide()
+        self._start_lookup("Looking it up…", "Reading the chapter list and cover ✧")
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def work() -> None:
@@ -482,11 +695,13 @@ class DownloadPage(QWidget):
         self._end_lookup()
         self.fetch_btn.setEnabled(True)
         self._hint(message, error=True)
+        if self.results:
+            self.results_card.show()  # pick another one instead
 
     def _on_fetched(self, site, info: core.MangaInfo) -> None:
         self._end_lookup()
         self.fetch_btn.setEnabled(True)
-        self._hint("Supported sites: " + ", ".join(s.name for s in core.SITES))
+        self._hint(self._idle_hint())
         if not info.chapters:
             self._on_fetch_failed("No chapters found on that page.")
             return
@@ -522,6 +737,7 @@ class DownloadPage(QWidget):
                                 "so they are grouped into files by chapter count.")
         self.manga_card.show()
         self.files_card.show()
+        self.back_btn.setVisible(bool(self.results))
         self.open_btn.hide()
         self.bytes_per_chapter = None
         self.estimating = True
@@ -543,7 +759,6 @@ class DownloadPage(QWidget):
 
     def open_manga(self, url: str, action: str = "open") -> None:
         """Load a title; with action "continue" or "retry", also start downloading what's left or what failed."""
-        self.url.setText(url)
         if action != "open":
             self._after_fetch = lambda: self._resume(action == "retry")
         self._fetch()
@@ -567,6 +782,8 @@ class DownloadPage(QWidget):
     def refresh_cover(self) -> None:
         if self.info:
             self.cover.setPixmap(rounded_pixmap(self.info.cover, 132, 188))
+        for item in self.results:
+            item.set_cover(item.data)  # the placeholder follows the theme
 
     # ---- file table
 
@@ -878,6 +1095,10 @@ class SettingsPage(QWidget):
 
         box, bl = card()
         form = form_layout()
+        self.source = combo_box()
+        for site in core.SITES:
+            self.source.addItem(site.name, site.name)
+        form.addRow("Default source", with_hint(self.source, "Where the Download page searches first."))
         self.download_dir = QLineEdit()
         form.addRow("Default download folder", folder_row(self.download_dir, "Default download folder"))
         self.temp_dir = QLineEdit(placeholderText="Inside the download folder (.manga-tmp)")
@@ -951,7 +1172,7 @@ class SettingsPage(QWidget):
         # Save is only clickable while the form differs from what is saved.
         for w in (self.download_dir, self.temp_dir):
             w.textChanged.connect(self._update_dirty)
-        for w in (self.theme, self.fmt, self.mode):
+        for w in (self.theme, self.source, self.fmt, self.mode):
             w.currentIndexChanged.connect(self._update_dirty)
         for w in (self.per_file, self.workers, self.delay):
             w.valueChanged.connect(self._update_dirty)
@@ -967,6 +1188,7 @@ class SettingsPage(QWidget):
         self.workers.setValue(s.workers)
         self.mode.setCurrentIndex(max(0, self.mode.findData(s.download_mode)))
         self.theme.setCurrentIndex(max(0, self.theme.findData(s.theme)))
+        self.source.setCurrentIndex(max(0, self.source.findData(s.default_source)))
         self.delay.setValue(s.request_delay)
 
     def _form(self) -> Settings:
@@ -981,6 +1203,7 @@ class SettingsPage(QWidget):
             chapters_per_file=self.per_file.value(),
             keep_temp=self.keep_temp.isChecked(),
             theme=self.theme.currentData(),
+            default_source=self.source.currentData(),
         )
 
     def _toast(self, text: str, error: bool = False) -> None:

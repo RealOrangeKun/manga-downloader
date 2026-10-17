@@ -15,6 +15,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from multiprocessing import Manager
 from pathlib import Path
+from urllib.parse import urlencode
 
 import requests
 
@@ -52,6 +53,17 @@ class MangaInfo:
     cover: bytes | None = None
     status: str = ""
     genres: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SearchResult:
+    """One title in a site's search results."""
+    title: str
+    url: str
+    cover_url: str = ""
+    status: str = ""
+    latest: str = ""
+    author: str = ""
 
 
 class RateLimiter:
@@ -98,11 +110,14 @@ class FanFox:
     _genres_re = re.compile(r'<p class="detail-info-right-tag-list">(.*?)</p>', re.S)
     _cover_re = re.compile(r'<img class="detail-info-cover-img" src="([^"]+)"')
     _image_re = re.compile(r'data-original="([^"]+)"')
+    _result_re = re.compile(r'<li>\s*<a href="/manga/([a-z0-9_]+)/"[^>]*><img class="manga-list-4-cover" '
+                            r'src="([^"]*)".*?</li>', re.S | re.I)
     _user_agent = ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/129.0 Mobile Safari/537.36")
 
     def __init__(self, url: str, limiter: RateLimiter):
-        self.slug = self.url_re.search(url).group(1).lower()
+        match = self.url_re.search(url)
+        self.slug = match.group(1).lower() if match else ""  # empty for an instance that only searches
         self.limiter = limiter
         self._local = threading.local()  # one HTTP session per thread
         # Only this title's own links; the page also links to chapters of other manga.
@@ -181,6 +196,35 @@ class FanFox:
                 pass  # a missing cover is not worth failing over
         return info
 
+    @classmethod
+    def search(cls, query: str, limiter: RateLimiter) -> list[SearchResult]:
+        """Titles matching a name, closest matches first."""
+        site = cls("", limiter)
+        page = site._get("https://fanfox.net/search?" + urlencode({"title": query.strip()})).text
+        results = []
+        for slug, cover, item in ((m.group(1).lower(), m.group(2), m.group(0)) for m in cls._result_re.finditer(page)):
+            title = re.search(r'class="manga-list-4-item-title"><a [^>]*title="([^"]+)"', item)
+            status = re.search(r'manga-list-4-show-tag-list-2">\s*<a[^>]*>([^<]+)<', item)
+            author = re.search(r'Author:<a [^>]*title="([^"]+)"', item)
+            latest = re.search(r'Latest Chapter:<a [^>]*>([^<]+)<', item)
+            results.append(SearchResult(
+                title=html.unescape(title.group(1)).strip() if title else slug.replace("_", " ").title(),
+                url=f"https://fanfox.net/manga/{slug}/",
+                cover_url=html.unescape(cover),
+                status=status.group(1).strip() if status else "",
+                latest=html.unescape(latest.group(1)).strip() if latest else "",
+                author=html.unescape(author.group(1)).strip() if author else "",
+            ))
+        # The site's own order puts spin-offs before the title itself; exact and prefix matches go first.
+        wanted = query.strip().lower()
+        return sorted(results, key=lambda r: (r.title.lower() != wanted, not r.title.lower().startswith(wanted)))
+
+    def cover(self, url: str) -> bytes | None:
+        try:
+            return self._get(url, retries=1).content
+        except SiteError:
+            return None
+
     def page_urls(self, chapter: Chapter) -> list[str]:
         # The mobile "roll" reader lists every page of a chapter in one document.
         roll = "https://m.fanfox.net" + chapter.url.replace("/manga/", "/roll_manga/", 1)
@@ -207,6 +251,11 @@ SITES = [FanFox]
 
 def site_for(url: str):
     return next((s for s in SITES if s.url_re.search(url)), None)
+
+
+def site_named(name: str):
+    """The site with this name, or the first one if it is unknown (e.g. removed since it was saved)."""
+    return next((s for s in SITES if s.name == name), SITES[0])
 
 
 # --------------------------------------------------------------------------- planning

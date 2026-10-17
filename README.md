@@ -40,7 +40,8 @@
 
 ## ♡ What it does
 
-- 🔎 **Paste a link, press Find**: cover, genres and every chapter show up, with the size of each file.
+- 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres and every
+  chapter show up, with the size of each file.
 - 📚 **Volumes, not a pile of pages**: one CBZ, PDF or EPUB per volume, or per *N* chapters when the
   site has no volume numbers. Webtoon strips are cut into pages for EPUB.
 - ⚡ **Fast but polite**: several files at once, with one shared speed limit so the site isn't flooded.
@@ -114,7 +115,9 @@ closed, that spot shows the delivery cat and how far along it is:
 
 **Download page**
 
-1. Paste a title link and press **Find**. The cover, title, genres and chapter count appear.
+1. Pick a source, type the manga's name and press **Search**. Click the right one in the
+   results; its cover, title, genres and chapter count appear. **Back to results** lets you
+   pick another. Pasting a title link instead of a name works too.
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
    title, how many chapters go in each file.
 3. Tick the files you want in the table (or use Select all / none / first N).
@@ -141,6 +144,7 @@ Every manga you've downloaded gets a card with its cover, how much of the series
 **Settings page**
 
 - Theme: light, dark, or match your system (the moon/sun button in the sidebar switches too).
+- Default source: the site the Download page searches unless you pick another.
 - Default download folder and temp folder, and whether to keep temp files.
 - Default format and chapters per file.
 - **Files at once**: how many files are made in parallel. `1` does one at a time.
