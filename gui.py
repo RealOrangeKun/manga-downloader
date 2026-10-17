@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 import os
 import re
 import sys
@@ -541,20 +542,63 @@ class DownloadPage(QWidget):
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.itemChanged.connect(self._update_summary)
         tl.addWidget(self.table)
+        self.anchor: int | None = None  # file of the last paw clicked, for shift-click
+        self.drag_state: bool | None = None  # ticking or unticking while dragging across paws
+        self.table.viewport().installEventFilter(self)
+        self.page = 0
+        self.prev_btn = QPushButton("‹", objectName="pager")
+        self.prev_btn.setToolTip("Previous page")
+        self.prev_btn.clicked.connect(lambda: self._show_page(self.page - 1))
+        self.page_lbl = label("", "meta")
+        self.next_btn = QPushButton("›", objectName="pager")
+        self.next_btn.setToolTip("Next page")
+        self.next_btn.clicked.connect(lambda: self._show_page(self.page + 1))
+        pager = QHBoxLayout()
+        pager.addStretch(1)
+        for w in (self.prev_btn, self.page_lbl, self.next_btn):
+            pager.addWidget(w)
+        pager.addStretch(1)
+        tl.addLayout(pager)
+
         picks = QHBoxLayout()
-        self.all_btn = set_icon(QPushButton(" Select all"), "heart")
-        self.all_btn.clicked.connect(lambda: self._check(lambda i: True))
-        self.none_btn = set_icon(QPushButton(" Select none"), "select_none")
-        self.none_btn.clicked.connect(lambda: self._check(lambda i: False))
-        self.first_n = spin(minimum=1, maximum=1, prefix="First ")
-        self.first_btn = set_icon(QPushButton(" Select"), "list")
-        self.first_btn.clicked.connect(lambda: self._check(lambda i: i < self.first_n.value()))
-        for w in (self.all_btn, self.none_btn):
-            picks.addWidget(w)
+        self.select_btn = set_icon(QPushButton(" Select all"), "paw_outline")
+        self.select_btn.clicked.connect(self._toggle_all)
+        self.page_btn = set_icon(QPushButton(" Select page"), "list")
+        self.page_btn.setToolTip("Tick or untick just the files on this page")
+        self.page_btn.clicked.connect(self._toggle_page)
+        # Quick picks from the download history; each replaces the current selection.
+        self.smart: dict[str, list[int]] = {"new": [], "missing": [], "failed": []}
+        self.smart_btns = {}
+        for kind, icon, tip in (("new", "cat", "Files with chapters that came out since you last looked"),
+                                ("missing", "download", "Files you don't have yet (or only partly)"),
+                                ("failed", "refresh", "Files that failed last time")):
+            b = set_icon(QPushButton(), icon)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _=False, kind=kind: self._check(lambda i, kind=kind: i in self.smart[kind]))
+            self.smart_btns[kind] = b
+        picks.addWidget(self.select_btn)
+        picks.addWidget(self.page_btn)
+        picks.addSpacing(12)
+        for b in self.smart_btns.values():
+            picks.addWidget(b)
         picks.addStretch(1)
-        picks.addWidget(self.first_n)
-        picks.addWidget(self.first_btn)
         tl.addLayout(picks)
+
+        ranges = QHBoxLayout()
+        ranges.addWidget(label("Chapters", "meta"))
+        self.range_from = spin(minimum=0, maximum=0)
+        ranges.addWidget(self.range_from)
+        ranges.addWidget(label("to", "meta"))
+        self.range_to = spin(minimum=0, maximum=0)
+        ranges.addWidget(self.range_to)
+        self.range_btn = set_icon(QPushButton(" Select"), "check")
+        self.range_btn.setToolTip("Tick every file with chapters in this range")
+        self.range_btn.clicked.connect(self._select_range)
+        ranges.addWidget(self.range_btn)
+        ranges.addSpacing(12)
+        ranges.addWidget(label("Shift-click a paw to tick everything in between, or drag across them ✧",
+                               "hint", wrap=True), 1)
+        tl.addLayout(ranges)
         self.files_card.hide()
         col.addWidget(self.files_card)
         col.addStretch(1)
@@ -841,7 +885,7 @@ class DownloadPage(QWidget):
         self.bars = []
         for i, g in enumerate(self.groups):
             check = QTableWidgetItem()
-            check.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check.setFlags(Qt.ItemIsEnabled)  # clicks on paws are handled in eventFilter
             check.setCheckState(Qt.Checked)
             self.table.setItem(i, 0, check)
             self.table.setItem(i, 1, QTableWidgetItem(g.label))
@@ -868,6 +912,7 @@ class DownloadPage(QWidget):
         self.range_from.setValue(self.range_from.minimum())
         self.range_to.setValue(self.range_to.maximum())
         self._mark_history()
+        self._update_smart()
         self._fill_sizes()
         self._update_summary()
 
@@ -1127,14 +1172,14 @@ class DownloadPage(QWidget):
     # ---- downloading
 
     def _set_locked(self, locked: bool) -> None:
-        for w in (self.url, self.fetch_btn, self.fmt, self.per_file, self.save_to, self.all_btn,
-                  self.none_btn, self.first_n, self.first_btn):
+        for w in (self.source, self.query, self.fetch_btn, self.fmt, self.per_file, self.save_to, self.select_btn,
+                  self.page_btn, self.range_from, self.range_to, self.range_btn):
             w.setEnabled(not locked)
-        self.table.setEnabled(True)
-        for i in range(self.table.rowCount()):
-            item = self.table.item(i, 0)
-            flags = Qt.ItemIsEnabled | (Qt.NoItemFlags if locked else Qt.ItemIsUserCheckable)
-            item.setFlags(flags)
+        self.table.setEnabled(True)  # paws ignore clicks while running (see eventFilter)
+        for b in self.smart_btns.values():
+            b.setEnabled(not locked)
+        if not locked:
+            self._update_smart()
 
     def _start(self) -> None:
         rows = self._checked_rows()

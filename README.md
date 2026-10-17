@@ -120,12 +120,23 @@ closed, that spot shows the delivery cat and how far along it is:
    pick another. Pasting a title link instead of a name works too.
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
    title, how many chapters go in each file.
-3. Tick the files you want in the table (or use Select all / none / first N).
+3. Tap the paws of the files you want. Shift-click a paw to tick everything since the last one
+   you tapped, or drag across paws to tick (or untick) a run of them. Under the table:
+   - **Select all / none**, and **Select page** for just the files on screen.
+   - **New ✧**, **Not downloaded** and **Failed** pick files from your download history.
+   - **Chapters … to …** ticks every file with chapters in that range.
+
+   Long series are split into pages (20 files each, changeable in Settings); use ‹ › to flip.
+   Tap a column title to sort by it: once for up, twice for down, a third time (or a
+   right-click) to go back to normal.
 4. Press **Download**. Each file gets its own progress bar; **Cancel** stops after the
    current page, and **Open folder** shows the results when it's done.
 
 Running it again with the same choices resumes where it stopped. Files that already exist
 are skipped, so delete a file to rebuild it.
+
+Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
+the original strips; use a reader with a continuous-scroll mode for those.
 
 **Library page**
 
