@@ -27,7 +27,7 @@ def render(mode: str, out: Path, data: Path) -> None:
     (data / "settings.json").write_text(json.dumps({"download_dir": r"C:\Users\you\Downloads\Manga", "theme": mode}))
 
     import paths
-    paths.DATA = data
+    paths.DATA = paths.CONFIG = data
 
     from PySide6.QtCore import QTimer
     from PySide6.QtGui import QImage

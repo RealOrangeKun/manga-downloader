@@ -144,7 +144,8 @@ def main() -> None:
     if args.notes:
         parts = ["The first release 🎉\n"] if found is None else []
         parts.extend(sections(notes))
-        parts.append(f"Download **Nyanga-Setup-{version}.exe** below and run it."
+        parts.append(f"Windows: download **Nyanga-Setup-{version}.exe** below and run it. "
+                     "Linux: download **Nyanga-x86_64.AppImage**, make it executable and open it."
                      + (" Already installed? The app updates itself.\n" if found else "\n"))
         args.notes.write_text("\n".join(parts), encoding="utf-8")
     if args.changelog:

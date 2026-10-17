@@ -95,7 +95,7 @@ class Settings:
 
     @staticmethod
     def path() -> Path:
-        return paths.DATA / "settings.json"  # next to the script (git-ignored), or %APPDATA% in the exe
+        return paths.CONFIG / "settings.json"  # next to the script (git-ignored), %APPDATA% or ~/.config when built
 
     @classmethod
     def load(cls) -> Settings:

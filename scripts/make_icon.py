@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the app icon into build/icon.ico for the exe and the installer."""
+"""Draws the app icon into build/icon.ico (the exe and the installer) and build/icon.png (the AppImage)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,8 @@ def main() -> None:
     out = ROOT / "build" / "icon.ico"
     out.parent.mkdir(exist_ok=True)
     image.save(out, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    print(out)
+    image.save(out.with_suffix(".png"))
+    print(out, out.with_suffix(".png"))
 
 
 if __name__ == "__main__":

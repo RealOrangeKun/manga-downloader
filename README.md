@@ -14,6 +14,7 @@
   <a href="https://github.com/nyanga-app/nyanga-app/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/nyanga-app/nyanga-app?style=for-the-badge&color=ff5c9a&label=latest"></a>
   <a href="https://github.com/nyanga-app/nyanga-app/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/nyanga-app/nyanga-app/total?style=for-the-badge&color=ff9cc6"></a>
   <img alt="Windows" src="https://img.shields.io/badge/windows-installer-ffb3cf?style=for-the-badge">
+  <img alt="Linux" src="https://img.shields.io/badge/linux-appimage-ffb3cf?style=for-the-badge">
 </p>
 
 <p align="center">
@@ -24,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nyanga-app/nyanga-app/releases/latest"><b>⬇ Download for Windows</b></a>
+  <a href="https://github.com/nyanga-app/nyanga-app/releases/latest"><b>⬇ Download for Windows or Linux</b></a>
   &nbsp;·&nbsp; <a href="#-using-it">How to use it</a>
   &nbsp;·&nbsp; <a href="#-run-from-source">Run from source</a>
 </p>
@@ -100,11 +101,27 @@ Psst: give the cat in the top-left corner a tap ♡
 
 That's the only time you install it ✧
 
+## 🐧 Install (Linux)
+
+1. Open the [latest release](https://github.com/nyanga-app/nyanga-app/releases/latest) and
+   download **Nyanga-x86_64.AppImage**. It's the whole app in one file; there's nothing to install.
+2. Put it somewhere it can stay (like `~/Applications`) and make it executable: right-click it,
+   **Properties**, tick **Allow executing file as program** (or `chmod +x Nyanga-x86_64.AppImage`).
+3. Double-click it to open Nyanga.
+4. Want it in your app menu? Go to **Settings** and press **Add Nyanga to your app menu**
+   (and **Remove** to take it out again). If a tool like Gear Lever or AppImageLauncher already
+   added it, the button says so and stays out of the way.
+
+If it doesn't open, your system may be missing FUSE: install `fuse3` (or `libfuse2` on older
+systems) from your package manager.
+
 ### 🎁 Updates
 
 When a new version is out, a card pops up with **Update now**. It downloads the new version,
 installs it and reopens by itself. Your settings and library are kept (they live in
-`%APPDATA%\Nyanga`). The first time it opens after an update, a **What's new** window lists
+`%APPDATA%\Nyanga` on Windows; on Linux the settings are in `~/.config/Nyanga` and the
+library in `~/.local/share/Nyanga`). On Linux the new version
+takes the old AppImage's place, so keep it in a folder you can write to. The first time it opens after an update, a **What's new** window lists
 what changed since your last version, in plain words. Want to read it again? Click the version
 at the bottom left, or see the whole [changelog](CHANGELOG.md).
 
@@ -181,7 +198,8 @@ of all chapters on the site), and what failed or is still waiting.
 - **Delay between requests**: shared by all workers, so more workers never means more
   requests per second. Sites ask for human browsing speed; going too low can get you blocked.
 
-Settings and history are saved in `%APPDATA%\Nyanga` in the installed app, or next to
+Settings and history are saved in `%APPDATA%\Nyanga` in the installed app on Windows,
+`~/.config/Nyanga` (settings) and `~/.local/share/Nyanga` (library) in the Linux AppImage, or next to
 `nyanga.py` (`settings.json` and `library/`, both git-ignored) when running from source.
 
 ## 🛠️ Run from source

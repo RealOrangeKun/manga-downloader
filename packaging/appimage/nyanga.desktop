@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Nyanga
+Comment=A cute & cozy app that downloads manga
+Exec=Nyanga %U
+Icon=nyanga
+StartupWMClass=nyanga
+Categories=Network;FileTransfer;
+Terminal=false

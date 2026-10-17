@@ -1,7 +1,7 @@
 # On every push to main: work out the next version from the conventional commits since the last
-# release, and if there is one, build the Windows installer and publish it as a GitHub Release.
-# The tag the release creates (v1.2.3) is where the version lives; the only thing committed back
-# is CHANGELOG.md, as a docs: commit so it doesn't make another release.
+# release, and if there is one, build the Windows installer and the Linux AppImage and publish them
+# as a GitHub Release. The tag the release creates (v1.2.3) is where the version lives; the only
+# thing committed back is CHANGELOG.md, as a docs: commit so it doesn't make another release.
 name: Release
 
 on:
@@ -17,8 +17,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: windows-latest
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.version.outputs.release }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,11 +35,36 @@ jobs:
         id: version
         run: python scripts/next_version.py --notes notes.md --changelog CHANGELOG.md --whats-new whats_new.json --write-version
 
+      # The builds need version.py and whats_new.json; the publish job needs the notes and changelog.
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.release == 'true'
+        with:
+          name: version
+          path: |
+            version.py
+            whats_new.json
+            notes.md
+            CHANGELOG.md
+
+  windows:
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       # PyInstaller's ready-made bootloader (the exe's launcher) is the same file in every app built
       # with it, malware included, so antivirus often flags it. Compiling our own (MSVC is on the
       # runner) gives a launcher nobody else has.
       - name: Install dependencies
-        if: steps.version.outputs.release == 'true'
         env:
           PYINSTALLER_COMPILE_BOOTLOADER: "1"
         run: |
@@ -44,7 +72,6 @@ jobs:
           python -m pip install pyinstaller --no-binary pyinstaller --verbose
 
       - name: Build the exe
-        if: steps.version.outputs.release == 'true'
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
@@ -52,32 +79,78 @@ jobs:
           pyinstaller packaging/nyanga.spec --noconfirm
 
       - name: Build the installer
-        if: steps.version.outputs.release == 'true'
         run: |
           choco install innosetup -y --no-progress
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.version.outputs.version }} packaging\installer.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ needs.version.outputs.version }} packaging\installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/installer/Nyanga-Setup-${{ needs.version.outputs.version }}.exe
+
+  linux:
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    # The AppImage runs on systems at least as new as the one it's built on, so build on an older one.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Qt's X11 plugin needs these; installed here, PyInstaller packs them into the app, so they
+      # don't have to be on the user's system.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxkbcommon-x11-0 libegl1
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build the AppImage
+        run: packaging/build_appimage.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/Nyanga-x86_64.AppImage
+
+  publish:
+    needs: [version, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+
       - name: Publish the release
-        if: steps.version.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create v${{ steps.version.outputs.version }}
-          dist/installer/Nyanga-Setup-${{ steps.version.outputs.version }}.exe
-          whats_new.json
-          --title "v${{ steps.version.outputs.version }}"
-          --notes-file notes.md
+          gh release create v${{ needs.version.outputs.version }}
+          out/windows/Nyanga-Setup-${{ needs.version.outputs.version }}.exe
+          out/linux/Nyanga-x86_64.AppImage
+          out/version/whats_new.json
+          --title "v${{ needs.version.outputs.version }}"
+          --notes-file out/version/notes.md
           --target ${{ github.sha }}
 
       - name: Commit the changelog
-        if: steps.version.outputs.release == 'true'
         run: |
-          $PSNativeCommandUseErrorActionPreference = $true  # stop at the first git command that fails
+          set -e
+          cp out/version/CHANGELOG.md CHANGELOG.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -- version.py
           git add CHANGELOG.md
-          git commit -m "docs: changelog for v${{ steps.version.outputs.version }}"
+          git commit -m "docs: changelog for v${{ needs.version.outputs.version }}"
           git pull --rebase origin main
           git push origin HEAD:main

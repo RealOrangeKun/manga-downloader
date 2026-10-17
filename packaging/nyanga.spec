@@ -1,6 +1,6 @@
-# PyInstaller build of the app as a folder: dist/Nyanga/Nyanga.exe
+# PyInstaller build of the app as a folder: dist/Nyanga/Nyanga.exe on Windows, dist/Nyanga/Nyanga on Linux
 # Run from the project folder: pyinstaller packaging/nyanga.spec --noconfirm
-# (after python scripts/make_icon.py, for the icon)
+# (after python scripts/make_icon.py, for the icon). On Linux, packaging/build_appimage.sh does all of it.
 
 from pathlib import Path
 

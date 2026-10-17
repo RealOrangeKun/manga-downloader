@@ -1,4 +1,4 @@
-"""Where the app's own files and the user's data live, from source and as a built exe. No GUI code."""
+"""Where the app's own files and the user's data live, from source and as a built app. No GUI code."""
 
 from __future__ import annotations
 
@@ -14,9 +14,14 @@ _HERE = Path(__file__).resolve().parent
 # Bundled read-only files (assets/): next to the scripts, or PyInstaller's unpacked folder.
 BUNDLE = Path(getattr(sys, "_MEIPASS", _HERE))
 
-# Settings and library. From source they stay next to the script (git-ignored); the installed app
-# can't write to its own folder and an update replaces it, so it uses %APPDATA%\Nyanga.
-if FROZEN:
-    DATA = Path(os.environ.get("APPDATA") or Path.home() / ".config") / "Nyanga"
+# The library (DATA) and settings.json (CONFIG). From source they stay next to the script
+# (git-ignored); the installed app can't write to its own folder and an update replaces it, so it
+# uses %APPDATA%\Nyanga on Windows. On Linux the library goes in ~/.local/share/Nyanga and the
+# settings in ~/.config/Nyanga (or wherever $XDG_DATA_HOME / $XDG_CONFIG_HOME say).
+if FROZEN and sys.platform == "win32":
+    DATA = CONFIG = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "Nyanga"
+elif FROZEN:
+    DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "Nyanga"
+    CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "Nyanga"
 else:
-    DATA = _HERE
+    DATA = CONFIG = _HERE
