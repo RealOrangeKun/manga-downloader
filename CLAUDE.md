@@ -80,8 +80,8 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 | `paths.py` | `BUNDLE` (assets, also inside the exe) and `DATA` (settings/library: next to the script from source, `%APPDATA%\Nyanga` in the exe). Use these, never `__file__`, for file locations. |
 | `updater.py` | Checks GitHub's latest release, downloads the installer, runs it silently with `/update=1`. Only active in the frozen Windows build. `notes_url()` is where the sidebar's clickable version goes. |
 | `version.py` | `__version__`; stays `0.0.0-dev` in the repo, CI writes the real one. Don't bump it by hand. |
-| `history.py` | Per-chapter download history in `library/history.json`, covers in `library/covers/` |
-| `gui.py` | `DownloadPage`, `SettingsPage`, `LibraryPage`, `Notification`, `MainWindow`, `Settings` dataclass (saved to `settings.json`) |
+| `history.py` | Per-chapter download history in `library/history.json`, covers in `library/covers/`. Removing a manga with files only sets `in_library: false`, so its download record survives; `entries()` is just the library, `get()` sees everything. |
+| `gui.py` | `DownloadPage`, `SettingsPage`, `LibraryPage`, `Notification`, `MascotLogo` (the sidebar cat that hops when tapped), `MainWindow`, `Settings` dataclass (saved to `settings.json`) |
 | `theme.py` | Light/dark palettes, stylesheet template, bundled Fredoka font, SVG icons |
 | `loader.py` | Hand-painted cats, our mascot: `CatLoader` (reading / celebrating), `MiniCat` with `paint_mini_cat` (fetching) or `paint_update_cat` (updates). The app icon in `theme.py` is the same cat. |
 | `assets/` | Fonts (OFL) and icon SVGs, bundled into the exe. `assets/readme/` holds README GIFs/screenshots rendered from the app (not bundled). |

@@ -39,8 +39,17 @@ class History:
     # ---- reading
 
     def entries(self) -> list[tuple[str, dict]]:
-        """Most recently used first."""
-        return sorted(self.data.items(), key=lambda kv: kv[1].get("last_used", 0), reverse=True)
+        """The library: most recently used first."""
+        shown = [kv for kv in self.data.items() if kv[1].get("in_library", True)]
+        return sorted(shown, key=lambda kv: kv[1].get("last_used", 0), reverse=True)
+
+    def in_library(self, key: str) -> bool:
+        return self.data.get(key, {}).get("in_library", True) if key in self.data else False
+
+    def files(self, key: str) -> list[Path]:
+        """Downloaded files of a manga that are still there."""
+        found = {Path(f) for f in self.data.get(key, {}).get("downloaded", {}).values()}
+        return sorted(f for f in found if f.exists())
 
     def get(self, key: str) -> dict | None:
         return self.data.get(key)
@@ -58,7 +67,7 @@ class History:
     def remember(self, key: str, url: str, title: str, total: int, status: str, cover: bytes | None) -> dict:
         """Create or refresh a manga's entry after it is looked up."""
         entry = self.data.setdefault(key, {"downloaded": {}, "failed": [], "pending": [], "known": []})
-        entry.update(url=url, title=title, total_chapters=total, status=status, last_used=time.time())
+        entry.update(url=url, title=title, total_chapters=total, status=status, last_used=time.time(), in_library=True)
         if cover:
             path = self.cover_path(key)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,10 +138,30 @@ class History:
         return max(counts, key=counts.get) if counts else None
 
     def forget(self, key: str) -> None:
-        """Remove a manga from the library. Its downloaded files are left alone."""
+        """Take a manga off the library. Its files stay, and so does the record of them, so opening
+        it again still shows what is downloaded."""
+        if self.files(key):
+            self.data[key]["in_library"] = False
+        else:
+            self.data.pop(key, None)
+            self.cover_path(key).unlink(missing_ok=True)
+        self.save()
+
+    def delete_files(self, key: str) -> int:
+        """Delete a manga's downloaded files (only those, then its folder if that leaves it empty)
+        and forget it completely. Returns how many files were deleted."""
+        files = self.files(key)
+        for f in files:
+            f.unlink(missing_ok=True)
+        for folder in {f.parent for f in files}:
+            try:
+                folder.rmdir()  # only succeeds when empty
+            except OSError:
+                pass
         self.data.pop(key, None)
         self.cover_path(key).unlink(missing_ok=True)
         self.save()
+        return len(files)
 
 
 def ago(timestamp: float | None) -> str:

@@ -20,7 +20,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApp
 from PySide6.QtWidgets import (
     QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
-    QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
+    QMessageBox, QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -374,6 +374,37 @@ class SortHeader(QHeaderView):
         painter.setBrush(theme.color(CURRENT["mode"], "accent"))
         painter.drawPath(arrow)
         painter.restore()
+
+
+def remove_from_library(parent: QWidget, history: History, key: str, busy: bool = False) -> bool:
+    """Take a manga off the library, asking what to do with its downloaded files if it has any."""
+    entry = history.get(key) or {}
+    title = entry.get("title", "this manga")
+    if busy:
+        QMessageBox.information(parent, "Still downloading", f"{title} is downloading right now. "
+                                "Remove it once that's done ✧")
+        return False
+    files = history.files(key)
+    if not files:
+        history.forget(key)
+        return True
+    folder = files[0].parent
+    box = QMessageBox(QMessageBox.Question, "Remove from library", f"Remove {title} from your library?", parent=parent)
+    box.setIconPixmap(theme.app_pixmap(96).scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+    box.setInformativeText(f"You have {len(files)} downloaded {'file' if len(files) == 1 else 'files'} in {folder}.\n"
+                           "If you keep them, opening this manga again later still shows what you have.")
+    keep = box.addButton("Remove, keep files", QMessageBox.AcceptRole)
+    delete = box.addButton("Remove and delete files", QMessageBox.DestructiveRole)
+    box.addButton("Cancel", QMessageBox.RejectRole)
+    box.setDefaultButton(keep)
+    box.exec()
+    if box.clickedButton() is keep:
+        history.forget(key)
+        return True
+    if box.clickedButton() is delete:
+        history.delete_files(key)
+        return True
+    return False
 
 
 def bar_holder(bar: QProgressBar) -> QWidget:
@@ -1708,6 +1739,7 @@ class LibraryPage(QWidget):
         super().__init__(objectName="page")
         self.settings = settings
         self.history = history
+        self.busy = lambda key: False  # is this manga downloading right now? (set by MainWindow)
         self.cards: dict[str, dict] = {}
         self.checking = False
         self.bridge = LibraryBridge()
@@ -1795,7 +1827,7 @@ class LibraryPage(QWidget):
         forget = set_icon(QPushButton(objectName="notifyClose"), "close", "muted", 14)
         forget.setToolTip("Remove from library (your downloaded files stay where they are)")
         forget.setCursor(Qt.PointingHandCursor)
-        forget.clicked.connect(lambda: (self.history.forget(key), self.refresh()))
+        forget.clicked.connect(lambda: remove_from_library(self, self.history, key, self.busy(key)) and self.refresh())
         top.addWidget(forget)
         col.addLayout(top)
 
@@ -2225,6 +2257,7 @@ class MainWindow(QWidget):
         self.history = History()
         self.download = DownloadPage(self.settings, self.history)
         self.library = LibraryPage(self.settings, self.history)
+        self.library.busy = lambda key: self.download.running and self.download.key == key
         self.library.open_requested.connect(self._open_from_library)
         self.settings_page = SettingsPage(self.settings)
         self.settings_page.changed.connect(self._settings_saved)

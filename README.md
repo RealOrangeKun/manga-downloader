@@ -155,7 +155,10 @@ of all chapters on the site), and what failed or is still waiting.
 - Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
   a "new" badge.
 - If you delete or move a downloaded file, it no longer counts as downloaded and can be
-  downloaded again. The × on a card removes it from the library; your files stay.
+  downloaded again.
+- The × on a card (or **Remove from library** on the Download page) takes a manga off the
+  library. If it has downloaded files, you choose to keep them or delete them too. Kept files
+  still count: open that manga again and it shows what you have, ready to add back.
 
 **Settings page**
 

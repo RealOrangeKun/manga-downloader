@@ -80,6 +80,8 @@ QLabel#hint[error="true"] { color: $error; font-weight: 600; }
 QLabel#mangaTitle { font-size: 22px; font-weight: 700; }
 QLabel#chip { background: $chip; color: $accent_soft; border-radius: 10px; padding: 3px 10px; font-size: 12px; }
 QFrame#card { background: $card; border: 1px solid $border; border-radius: 20px; }
+QMessageBox { background: $card; }
+QMessageBox QLabel { color: $text; }
 QFrame#result { background: $alt_row; border: 2px solid transparent; border-radius: 16px; }
 QFrame#result:hover { background: $selection; border-color: $focus; }
 QLabel#resultTitle { color: $text; font-size: 15px; font-weight: 600; }
