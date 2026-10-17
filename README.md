@@ -126,7 +126,8 @@ closed, that spot shows the delivery cat and how far along it is:
    you tapped, or drag across paws to tick (or untick) a run of them. Under the table:
    - **Select all / none**, and **Select page** for just the files on screen.
    - **New ✧**, **Not downloaded** and **Failed** pick files from your download history.
-   - **Chapters … to …** ticks every file with chapters in that range.
+   - **Volumes / Chapters … to …** ticks every file in that range. Chapters that are in a volume
+     are picked by volume; **Chapters** covers the newer ones that aren't in a volume yet.
 
    Long series are split into pages (20 files each, changeable in Settings); use ‹ › to flip.
    Tap a column title to sort by it: once for up, twice for down, a third time (or a

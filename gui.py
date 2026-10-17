@@ -692,14 +692,21 @@ class DownloadPage(QWidget):
         tl.addLayout(picks)
 
         ranges = QHBoxLayout()
-        ranges.addWidget(label("Chapters", "meta"))
+        self.range_unit = combo_box()  # only when the title has both volumes and loose chapters
+        self.range_unit.addItem("Volumes", "volume")
+        self.range_unit.addItem("Chapters", "chapter")
+        self.range_unit.currentIndexChanged.connect(lambda *_: self._range_bounds())
+        self.range_unit.hide()
+        ranges.addWidget(self.range_unit)
+        self.range_lbl = label("Chapters", "meta")
+        ranges.addWidget(self.range_lbl)
+        self.range_key = ""  # title the unit was last picked for
         self.range_from = spin(minimum=0, maximum=0)
         ranges.addWidget(self.range_from)
         ranges.addWidget(label("to", "meta"))
         self.range_to = spin(minimum=0, maximum=0)
         ranges.addWidget(self.range_to)
         self.range_btn = set_icon(QPushButton(" Select"), "check")
-        self.range_btn.setToolTip("Tick every file with chapters in this range")
         self.range_btn.clicked.connect(self._select_range)
         ranges.addWidget(self.range_btn)
         ranges.addSpacing(12)
@@ -1116,11 +1123,17 @@ class DownloadPage(QWidget):
         self._apply_sort()
         self._show_page(0)
         self.anchor = None
-        numbers = [c.number for c in self.info.chapters]
-        for box in (self.range_from, self.range_to):
-            box.setRange(int(min(numbers)), math.ceil(max(numbers)))
-        self.range_from.setValue(self.range_from.minimum())
-        self.range_to.setValue(self.range_to.maximum())
+        has_volumes = any(c.volume != core.NO_VOLUME for c in self.info.chapters)
+        has_loose = any(c.volume == core.NO_VOLUME for c in self.info.chapters)
+        self.range_unit.setVisible(has_volumes and has_loose)
+        self.range_lbl.setVisible(not (has_volumes and has_loose))
+        self.range_lbl.setText("Chapters" if has_loose else "Volumes")
+        if self.range_key != self.key:  # a new title: volumes first when it has them
+            self.range_key = self.key
+            self.range_unit.blockSignals(True)
+            self.range_unit.setCurrentIndex(0 if has_volumes else 1)
+            self.range_unit.blockSignals(False)
+        self._range_bounds()
         self._mark_history()
         self._update_smart()
         self._fill_sizes()
@@ -1210,10 +1223,47 @@ class DownloadPage(QWidget):
         files = self._page_files()
         self._set_checks(files, not all(self._ticked(i) for i in files))
 
+    def _by_volume(self) -> bool:
+        if not self.info:
+            return False
+        if self.range_unit.isVisibleTo(self):
+            return self.range_unit.currentData() == "volume"
+        return all(c.volume != core.NO_VOLUME for c in self.info.chapters)
+
+    def _loose_chapters(self) -> list[float]:
+        """Chapters without a volume, from just after the last one that is in a volume. Sites
+        also list a few early side chapters without a volume; those stay out of the range."""
+        in_volumes = [c.number for c in self.info.chapters if c.volume != core.NO_VOLUME]
+        loose = [c.number for c in self.info.chapters if c.volume == core.NO_VOLUME]
+        later = [n for n in loose if n > max(in_volumes)] if in_volumes else loose
+        return later or loose
+
+    def _range_bounds(self) -> None:
+        """Fit the range boxes to the first and last volume or chapter of the title."""
+        if not self.info:
+            return
+        if self._by_volume():
+            numbers = [c.volume for c in self.info.chapters if c.volume != core.NO_VOLUME]
+        else:
+            numbers = self._loose_chapters()
+        for box in (self.range_from, self.range_to):
+            box.setRange(int(min(numbers)), math.ceil(max(numbers)))
+            range_tip(box)
+        self.range_from.setValue(self.range_from.minimum())
+        self.range_to.setValue(self.range_to.maximum())
+        unit = "volumes" if self._by_volume() else "chapters"
+        self.range_btn.setToolTip(f"Tick every file with {unit} in this range")
+
     def _select_range(self) -> None:
         low, high = sorted((self.range_from.value(), self.range_to.value()))
-        # high + 1 so "to 10" includes 10.5; a file counts if any of its chapters is in the range
-        self._check(lambda i: any(low <= c.number < high + 1 for c in self.groups[i].chapters))
+        if self._by_volume():
+            self._check(lambda i: any(c.volume != core.NO_VOLUME and low <= c.volume <= high
+                                      for c in self.groups[i].chapters))
+        else:
+            # Only chapters without a volume (those are picked by volume); high + 1 so "to 10"
+            # includes 10.5; a file counts if any of its chapters is in the range.
+            self._check(lambda i: any(c.volume == core.NO_VOLUME and low <= c.number < high + 1
+                                      for c in self.groups[i].chapters))
 
     def _ticked(self, row: int) -> bool:
         return self._item(row, 0).checkState() == Qt.Checked
@@ -1383,7 +1433,7 @@ class DownloadPage(QWidget):
 
     def _set_locked(self, locked: bool) -> None:
         for w in (self.source, self.query, self.fetch_btn, self.fmt, self.per_file, self.save_to, self.select_btn,
-                  self.page_btn, self.range_from, self.range_to, self.range_btn):
+                  self.page_btn, self.range_unit, self.range_from, self.range_to, self.range_btn, self.lib_btn):
             w.setEnabled(not locked)
         self.table.setEnabled(True)  # paws ignore clicks while running (see eventFilter)
         for b in self.smart_btns.values():
