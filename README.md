@@ -140,8 +140,10 @@ the original strips; use a reader with a continuous-scroll mode for those.
 
 **Library page**
 
-Every manga you've downloaded gets a card with its cover, how much of the series you have
-(chapters downloaded out of all chapters on the site), and what failed or is still waiting.
+Press **Add to library** next to a manga's title to keep it here (downloading it adds it too),
+and **Remove from library** to take it off again.
+Each one gets a card with its cover, how much of the series you have (chapters downloaded out
+of all chapters on the site), and what failed or is still waiting.
 
 - **Continue** picks up chapters from a download that was cancelled or interrupted.
 - **Retry failed** downloads the chapters that failed again.

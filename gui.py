@@ -473,7 +473,12 @@ class DownloadPage(QWidget):
         self.meta_lbl = label("", "meta", wrap=True)
         self.chips = QHBoxLayout()
         self.chips.setSpacing(6)
-        right.addWidget(self.title_lbl)
+        title_row = QHBoxLayout()
+        title_row.addWidget(self.title_lbl, 1)
+        self.lib_btn = set_icon(QPushButton(" Add to library"), "library")
+        self.lib_btn.clicked.connect(self._toggle_library)
+        title_row.addWidget(self.lib_btn, 0, Qt.AlignTop)
+        right.addLayout(title_row)
         right.addWidget(self.meta_lbl)
         right.addLayout(self.chips)
         right.addSpacing(6)
@@ -775,11 +780,12 @@ class DownloadPage(QWidget):
         self.site, self.info = site, info
         self.key = site.key
         self.history.prune_missing()
-        entry = self.history.remember(self.key, site.title_url, info.title, len(info.chapters), info.status,
-                                      info.cover)
-        keys = [chapter_key(c.number) for c in info.chapters]
-        self.new_keys = {k for k in keys if k not in set(entry.get("known", []))} if entry.get("known") else set()
-        self.history.mark_seen(self.key, keys)
+        self.new_keys = set()
+        if self.history.in_library(self.key):  # only titles in the library are kept up to date there
+            known = set(self.history.get(self.key).get("known", []))
+            self.new_keys = {chapter_key(c.number) for c in info.chapters} - known if known else set()
+            self._add_to_library()
+        self.sync_library_btn()
         self.refresh_cover()
         self.title_lbl.setText(info.title)
         while self.chips.count():
@@ -821,6 +827,36 @@ class DownloadPage(QWidget):
         if self._after_fetch:
             action, self._after_fetch = self._after_fetch, None
             action()
+
+    # ---- library
+
+    def _add_to_library(self) -> None:
+        """Save the open title to the library (or refresh it there), with its cover and chapter list."""
+        if not self.info or not self.site:
+            return
+        info = self.info
+        self.history.remember(self.key, self.site.title_url, info.title, len(info.chapters), info.status, info.cover)
+        self.history.mark_seen(self.key, [chapter_key(c.number) for c in info.chapters])
+        self.sync_library_btn()
+
+    def _toggle_library(self) -> None:
+        if self.running:
+            return  # the running download is being recorded there
+        if self.history.in_library(self.key):
+            if remove_from_library(self, self.history, self.key, busy=self.running):
+                self.sync_library_btn()
+                if not self.history.get(self.key):
+                    self._regroup()  # its files were deleted: start the table over
+        else:
+            self._add_to_library()
+
+    def sync_library_btn(self) -> None:
+        inside = bool(self.key) and self.history.in_library(self.key)
+        self.lib_btn.setText(" Remove from library" if inside else " Add to library")
+        swap_icon(self.lib_btn, "close" if inside else "library")
+        self.lib_btn.setEnabled(not self.running)
+        self.lib_btn.setToolTip("Take it off the Library page; your downloaded files stay where they are"
+                                if inside else "Keep it on the Library page; downloading adds it too")
 
     # ---- opening from the library
 
@@ -1218,6 +1254,8 @@ class DownloadPage(QWidget):
             bar.setFormat(core.QUEUED)
             bar.setProperty("state", "")
             repolish(bar)
+        if not self.history.in_library(self.key):
+            self._add_to_library()  # downloads are tracked in the library
         self.history.start_run(self.key, [k for r in rows for k in group_keys(self.groups[r])],
                                fmt, self.per_file.value(), str(save_to))
         self._refresh_run_status()
@@ -2099,6 +2137,8 @@ class MainWindow(QWidget):
         self.stack.setCurrentIndex(index)
         if self.stack.currentWidget() is self.library:
             self.library.refresh()
+        elif self.stack.currentWidget() is self.download:
+            self.download.sync_library_btn()  # it may have been removed on the Library page
 
     def _open_from_library(self, url: str, action: str) -> None:
         if self.download.running:
