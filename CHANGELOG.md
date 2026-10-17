@@ -2,6 +2,11 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.5.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.1) (2026-10-17)
+
+### Fixes
+- download: put the back to results button on the left
+
 ## [1.5.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.0) (2026-10-17)
 
 ### New
