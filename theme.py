@@ -148,9 +148,9 @@ QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSp
 }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator, QTableWidget::indicator { width: 22px; height: 22px; border: none; background: transparent; }
-QCheckBox::indicator:unchecked, QTableWidget::indicator:unchecked { image: url($heart_off); }
-QCheckBox::indicator:checked, QTableWidget::indicator:checked { image: url($heart_on); }
-QCheckBox::indicator:checked:disabled, QTableWidget::indicator:checked:disabled { image: url($heart_on_disabled); }
+QCheckBox::indicator:unchecked, QTableWidget::indicator:unchecked { image: url($paw_off); }
+QCheckBox::indicator:checked, QTableWidget::indicator:checked { image: url($paw_on); }
+QCheckBox::indicator:checked:disabled, QTableWidget::indicator:checked:disabled { image: url($paw_on_disabled); }
 QTableWidget {
     background: $card; alternate-background-color: $alt_row; border: none; gridline-color: transparent;
     selection-background-color: $selection; selection-color: $text;
@@ -179,10 +179,10 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 def stylesheet(mode: str) -> str:
     icons = ASSETS / "icons"
     values = {k: v for k, v in PALETTES[mode].items() if isinstance(v, str)}
-    values.update(  # tick boxes are hearts: an outline when off, a pink heart when on
-        heart_on=(icons / "heart-on.svg").as_posix(),
-        heart_on_disabled=(icons / "heart-on-disabled.svg").as_posix(),
-        heart_off=(icons / f"heart-off-{mode}.svg").as_posix(),
+    values.update(  # tick boxes are cat paws: an outline when off, a pink paw when on
+        paw_on=(icons / "paw-on.svg").as_posix(),
+        paw_on_disabled=(icons / "paw-on-disabled.svg").as_posix(),
+        paw_off=(icons / f"paw-off-{mode}.svg").as_posix(),
         chevron=(icons / f"chevron-{mode}.svg").as_posix(),
     )
     return _STYLE.substitute(values)
@@ -228,6 +228,8 @@ _ICONS = {
               '1.4 1.5 0 1.7-2.6 3.2-2.6 3.2z" fill="COLOR"/>',
     "heart": '<path d="M12 20.3s-7.6-4.6-9-9.4C2.1 7.7 4.2 4.8 7.2 4.8c2 0 3.5 1.1 4.8 2.8 1.3-1.7 2.8-2.8 '
              '4.8-2.8 3 0 5.1 2.9 4.2 6.1-1.4 4.8-9 9.4-9 9.4z" fill="COLOR"/>',
+    "paw": '<path d="M12 12.4c-2.9 0-5.7 3-5.7 5.3 0 1.7 1.3 2.6 2.9 2.6 1.1 0 1.9-.6 2.8-.6s1.7.6 2.8.6c1.6 0 2.9-.9 2.9-2.6 0-2.3-2.8-5.3-5.7-5.3z" fill="COLOR"/><ellipse cx="4.7" cy="10.6" rx="1.9" ry="2.4" transform="rotate(-22 4.7 10.6)" fill="COLOR"/><ellipse cx="8.9" cy="6.4" rx="2.0" ry="2.6" transform="rotate(-8 8.9 6.4)" fill="COLOR"/><ellipse cx="15.1" cy="6.4" rx="2.0" ry="2.6" transform="rotate(8 15.1 6.4)" fill="COLOR"/><ellipse cx="19.3" cy="10.6" rx="1.9" ry="2.4" transform="rotate(22 19.3 10.6)" fill="COLOR"/>',
+    "paw_outline": '<path d="M12 12.4c-2.9 0-5.7 3-5.7 5.3 0 1.7 1.3 2.6 2.9 2.6 1.1 0 1.9-.6 2.8-.6s1.7.6 2.8.6c1.6 0 2.9-.9 2.9-2.6 0-2.3-2.8-5.3-5.7-5.3z" fill="none" stroke="COLOR" stroke-width="1.8"/><ellipse cx="4.7" cy="10.6" rx="1.9" ry="2.4" transform="rotate(-22 4.7 10.6)" fill="none" stroke="COLOR" stroke-width="1.8"/><ellipse cx="8.9" cy="6.4" rx="2.0" ry="2.6" transform="rotate(-8 8.9 6.4)" fill="none" stroke="COLOR" stroke-width="1.8"/><ellipse cx="15.1" cy="6.4" rx="2.0" ry="2.6" transform="rotate(8 15.1 6.4)" fill="none" stroke="COLOR" stroke-width="1.8"/><ellipse cx="19.3" cy="10.6" rx="1.9" ry="2.4" transform="rotate(22 19.3 10.6)" fill="none" stroke="COLOR" stroke-width="1.8"/>',
     "cat": '<path d="M5 10L5.6 4.4 9.6 7.2Q12 6.5 14.4 7.2L18.4 4.4 19 10Q20.4 12.2 19.9 14.6 18.8 19.6 12 19.8 '
            '5.2 19.6 4.1 14.6 3.6 12.2 5 10z" fill="none" stroke="COLOR" stroke-width="2" stroke-linejoin="round"/>'
            '<path d="M8.3 12.8q1.3-1.3 2.6 0M13.1 12.8q1.3-1.3 2.6 0" fill="none" stroke="COLOR" stroke-width="1.7" '
