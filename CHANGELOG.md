@@ -1,8 +1,16 @@
 # Changelog
 
-Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/RealOrangeKun/nyanga/releases) with its installer.
+Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
-## [1.3.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.3.0) (2026-10-17)
+## [1.4.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.4.0) (2026-10-17)
+
+### New
+- show what's new after an update
+
+### Fixes
+- check for updates at the app's new home
+
+## [1.3.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.3.0) (2026-10-17)
 
 ### New
 - library: add or remove a manga from the library with a button instead of on every lookup
@@ -16,7 +24,7 @@ Written by the release workflow from the commit messages. Each version is a [Git
 - library: keep download progress when a manga is removed, and offer to delete its files
 - remake a volume's file when the site adds chapters to it
 
-## [1.2.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.2.0) (2026-10-17)
+## [1.2.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.2.0) (2026-10-17)
 
 ### New
 - search for a manga by name and pick it from the results
@@ -33,12 +41,12 @@ Written by the release workflow from the commit messages. Each version is a [Git
 ### Fixes
 - settings: let the settings page scroll so the window fits smaller screens
 
-## [1.1.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.1.0) (2026-10-17)
+## [1.1.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.1.0) (2026-10-17)
 
 ### New
 - click the version to see what's new
 
-## [1.0.0](https://github.com/RealOrangeKun/nyanga/releases/tag/v1.0.0) (2026-10-16)
+## [1.0.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.0.0) (2026-10-16)
 
 ### New
 - install as a Windows app that updates itself
