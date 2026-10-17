@@ -128,6 +128,9 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
 - New settings: add a field to the `Settings` dataclass (old `settings.json` files without it
   must still load) and a row on `SettingsPage`. If the Download page shows it too, handle it in
   `DownloadPage.apply_defaults` so a saved change follows through to fields the user didn't edit.
+- Inputs: make number boxes with `spin()` (snaps to its range, tooltip shows it; call
+  `range_tip()` after changing the range). Folder fields get `watch_folder()` and are checked
+  with `folder_problem()` before they're used or saved.
 - `settings.json`, `library/`, `downloads/`, `.manga-tmp/` are git-ignored user data.
 - Match the existing style: `from __future__ import annotations`, type hints, short module
   docstrings, sparse comments.

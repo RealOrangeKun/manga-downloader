@@ -101,6 +101,7 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
     padding: 7px 10px; selection-background-color: $primary_a; font-size: 13px;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: $focus; }
+QLineEdit[error="true"] { border-color: $error; }
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
     color: $input_disabled_text; background: $input_disabled;
 }

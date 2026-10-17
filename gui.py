@@ -18,7 +18,7 @@ import requests
 from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+    QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
     QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -158,7 +158,50 @@ def rounded_pixmap(data: bytes | None, w: int, h: int, radius: int = 16) -> QPix
 def spin(cls=QSpinBox, **kw):
     box = cls(**kw)
     box.lineEdit().setTextMargins(6, 0, 0, 0)  # match the padding of the line edits
+    box.setCorrectionMode(QAbstractSpinBox.CorrectToNearestValue)  # too big becomes the biggest, not the old value
+    range_tip(box)
     return box
+
+
+def range_tip(box) -> None:
+    """Tell what a number box accepts; call again after its range changes."""
+    fmt = (lambda v: f"{v:g}") if isinstance(box, QDoubleSpinBox) else str
+    box.setToolTip(f"{box.prefix()}{fmt(box.minimum())} to {fmt(box.maximum())}{box.suffix()}")
+
+
+WINDOWS_BAD = set('<>"|?*')
+
+
+def folder_problem(text: str) -> str | None:
+    """Why a folder path can't be used, or None. Empty is fine: it means the default."""
+    text = text.strip()
+    if not text:
+        return None
+    path = Path(text).expanduser()
+    example = r"C:\Users\you\Manga" if sys.platform == "win32" else str(Path.home() / "Manga")
+    if not path.is_absolute():
+        return f"Use the full folder path, like {example}"
+    if sys.platform == "win32":
+        rest = str(path)[len(path.drive):]
+        if WINDOWS_BAD & set(rest) or ":" in rest:
+            return 'Folder names can\'t have any of these: < > : " | ? *'
+        if len(str(path)) > 200:
+            return "That path is too long for Windows; pick a shorter one"
+    if path.exists() and not path.is_dir():
+        return "That's a file, not a folder"
+    return None
+
+
+def watch_folder(edit: QLineEdit) -> None:
+    """Outline a folder field in red while its path can't be used, with the reason as its tooltip."""
+    def check() -> None:
+        problem = folder_problem(edit.text())
+        edit.setProperty("error", bool(problem))
+        edit.setToolTip(problem or "")
+        repolish(edit)
+
+    edit.textChanged.connect(check)
+    check()
 
 
 def combo_box() -> QComboBox:
@@ -407,7 +450,7 @@ class DownloadPage(QWidget):
         self.source.setCurrentIndex(max(0, self.source.findData(settings.default_source)))
         self.source.setToolTip("Where to search")
         self.source.currentIndexChanged.connect(lambda *_: self._hint(self._idle_hint()))
-        self.query = QLineEdit(placeholderText="Type a manga name, like One Piece ✧")
+        self.query = QLineEdit(placeholderText="Type a manga name, like One Piece ✧", maxLength=200)
         self.query.returnPressed.connect(self._find)
         self.fetch_btn = set_icon(QPushButton(" Search", objectName="primary"), "search", "white")
         self.fetch_btn.clicked.connect(self._find)
@@ -493,6 +536,7 @@ class DownloadPage(QWidget):
         self.per_file_lbl = QLabel("Chapters per file")
         form.addRow(self.per_file_lbl, self.per_file)
         self.save_to = QLineEdit()
+        watch_folder(self.save_to)
         form.addRow("Save to", folder_row(self.save_to, "Download folder"))
         right.addLayout(form)
         self.loose_note = label("", "hint", wrap=True)
@@ -666,10 +710,16 @@ class DownloadPage(QWidget):
     def _find(self) -> None:
         text = self.query.text().strip()
         if not text:
-            self._hint("Type a manga name first ♡", error=True)
+            self._hint("Type a manga name first", error=True)
             return
         if core.site_for(text):
             self._fetch(text)
+            return
+        if len(text) < 2:
+            self._hint("Type at least 2 letters of the name", error=True)
+            return
+        if len(text) > 100:
+            self._hint("That's a very long name; try just the main part of the title", error=True)
             return
         if re.match(r"https?://", text):
             self._hint("That isn't a title link from a supported site: "
@@ -802,6 +852,7 @@ class DownloadPage(QWidget):
         loose = sum(1 for c in info.chapters if c.volume == core.NO_VOLUME)
         self.per_file.blockSignals(True)
         self.per_file.setMaximum(max(1, loose))
+        range_tip(self.per_file)
         self.per_file.setValue(min(self.settings.chapters_per_file, max(1, loose)))
         self.per_file.blockSignals(False)
         self.per_file.setVisible(bool(loose))
@@ -1222,6 +1273,11 @@ class DownloadPage(QWidget):
         rows = self._checked_rows()
         if not rows or not self.site:
             return
+        problem = folder_problem(self.save_to.text())
+        if problem:
+            self._status("That download folder won't work", problem)
+            self.save_to.setFocus()
+            return
         save_to = Path(self.save_to.text().strip() or self.settings.download_dir).expanduser()
         temp_root = Path(self.settings.temp_dir).expanduser() if self.settings.temp_dir else save_to / ".manga-tmp"
         title = self.info.title
@@ -1388,6 +1444,8 @@ class SettingsPage(QWidget):
         self.download_dir = QLineEdit()
         form.addRow("Default download folder", folder_row(self.download_dir, "Default download folder"))
         self.temp_dir = QLineEdit(placeholderText="Inside the download folder (.manga-tmp)")
+        for edit in (self.download_dir, self.temp_dir):
+            watch_folder(edit)
         form.addRow("Temp folder", with_hint(folder_row(self.temp_dir, "Temp folder"),
                                              "Pages are kept here while a file is being made."))
         self.keep_temp = QCheckBox("Keep temp files after a file is made")
@@ -1523,6 +1581,12 @@ class SettingsPage(QWidget):
             b.setEnabled(self.dirty())
 
     def _save(self) -> None:
+        for name, edit in (("Download folder", self.download_dir), ("Temp folder", self.temp_dir)):
+            problem = folder_problem(edit.text())
+            if problem:
+                self._toast(f"{name}: {problem}", error=True)
+                edit.setFocus()
+                return
         old = Settings(**asdict(self.settings))
         # Update in place: the download page holds the same Settings object.
         for f in fields(Settings):
