@@ -44,6 +44,14 @@ def set_icon(button: QPushButton, name: str, color_key: str = "accent_soft", siz
     return button
 
 
+def swap_icon(button: QPushButton, name: str) -> None:
+    """Give a button made with set_icon a different icon, keeping its color."""
+    for i, (b, _, key) in enumerate(_ICON_BUTTONS):
+        if b is button:
+            _ICON_BUTTONS[i] = (b, name, key)
+            _paint_icon(b, name, key)
+
+
 def _paint_icon(button: QPushButton, name: str, color_key: str) -> None:
     color = "#ffffff" if color_key == "white" else theme.color(CURRENT["mode"], color_key)
     button.setIcon(theme.icon(name, color))
@@ -893,6 +901,11 @@ class DownloadPage(QWidget):
 
     def _update_summary(self, *_) -> None:
         rows = self._checked_rows()
+        everything = bool(rows) and len(rows) == self.table.rowCount()
+        self.select_btn.setText(" Select none" if everything else " Select all")
+        swap_icon(self.select_btn, "paw" if everything else "paw_outline")
+        page = self._page_files()
+        self.page_btn.setText(" Unselect page" if page and all(self._ticked(i) for i in page) else " Select page")
         chapters = sum(len(self.groups[i].chapters) for i in rows)
         size = self._size_text(chapters)
         self.summary.setText(f"{len(rows)} of {len(self.groups)} files  ·  {chapters} chapters  ·  {size}".rstrip())
