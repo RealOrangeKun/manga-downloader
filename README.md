@@ -91,7 +91,8 @@ Psst: give the cat in the top-left corner a tap ♡
 1. Open the [latest release](https://github.com/RealOrangeKun/nyanga/releases/latest) and
    download **Nyanga-Setup-x.y.z.exe**.
 2. Run it. Windows may say "Windows protected your PC" because the app isn't signed: click
-   **More info**, then **Run anyway**. No admin rights are needed.
+   **More info**, then **Run anyway**. No admin rights are needed. You only see this once:
+   the installed app and its updates aren't flagged.
 3. Used it with Python before? On the **Bring your old settings** page, tick the import and pick
    the folder that has `nyanga.py` in it. Its `settings.json` and `library` folder (history
    and covers) are copied into the installed app.
@@ -203,26 +204,6 @@ py -m venv .venv
 ```
 
 After the first time, only the last line is needed.
-
-## 🔏 Before sharing it more widely
-
-The installer isn't code-signed, so Windows SmartScreen shows "Windows protected your PC" with
-an unknown publisher the first time someone runs it from a browser download. The installed app
-and its automatic updates aren't flagged: only files downloaded through a browser are checked.
-That's fine for a few friends, but to hand it out to more people, sign the exe and installer in
-the release workflow:
-
-- **Microsoft Trusted Signing** (Azure): the cheapest real option, a monthly subscription
-  (around $10 last checked), with a GitHub Action for signing in CI. Needs identity
-  verification, and individual sign-up was limited to a few countries (mainly the US and
-  Canada), so check that first.
-- **An OV code-signing certificate**: a few hundred dollars a year. The key has to be on a
-  hardware token or a cloud signing service, which makes CI signing more work.
-- **EV certificates** no longer skip SmartScreen right away, so they aren't worth the extra cost.
-- **Free signing for open source** (e.g. SignPath Foundation) usually needs an OSI-approved
-  license, which Nyanga's license isn't.
-
-Even when signed, SmartScreen may warn for a while until the signature builds a reputation.
 
 ## 🧶 Contributing
 

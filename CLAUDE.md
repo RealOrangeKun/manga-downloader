@@ -109,6 +109,15 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
   installer named like that.
 - `nyanga.py` must call `multiprocessing.freeze_support()` first, or the exe's worker
   processes open new windows.
+- Code signing (not done yet): the installer is unsigned, so SmartScreen warns on a browser
+  download (the installed app and updates aren't flagged). Fine for a few friends; to hand it
+  out more widely, sign the exe and installer in the release workflow. Options: Microsoft
+  Trusted Signing (Azure, ~$10/month, has a GitHub Action, needs identity verification and
+  individual sign-up was limited to a few countries, mainly US/Canada); an OV certificate (a
+  few hundred dollars a year, key on a hardware token or cloud service, so CI signing is more
+  work). EV certificates no longer skip SmartScreen right away, so not worth it. Free
+  open-source signing (e.g. SignPath Foundation) usually needs an OSI license, which ours
+  isn't. Even signed, SmartScreen may warn until the signature builds reputation.
 
 ## Conventions
 
