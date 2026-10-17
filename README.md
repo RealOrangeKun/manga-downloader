@@ -202,12 +202,15 @@ and its automatic updates aren't flagged: only files downloaded through a browse
 That's fine for a few friends, but to hand it out to more people, sign the exe and installer in
 the release workflow:
 
-If there's a new version, it builds the exe with PyInstaller ([packaging/nyanga.spec](packaging/nyanga.spec)),
-wraps it in an Inno Setup installer ([packaging/installer.iss](packaging/installer.iss)), and publishes a
-GitHub Release tagged `vX.Y.Z` with the installer and notes made from the commits. The same
-notes go into [CHANGELOG.md](CHANGELOG.md), which the workflow commits back as a `docs:` commit.
-The tag is the source of the version; `version.py` says `0.0.0-dev` in the repo and gets the
-real number during the build.
+- **Microsoft Trusted Signing** (Azure): the cheapest real option, a monthly subscription
+  (around $10 last checked), with a GitHub Action for signing in CI. Needs identity
+  verification, and individual sign-up was limited to a few countries (mainly the US and
+  Canada), so check that first.
+- **An OV code-signing certificate**: a few hundred dollars a year. The key has to be on a
+  hardware token or a cloud signing service, which makes CI signing more work.
+- **EV certificates** no longer skip SmartScreen right away, so they aren't worth the extra cost.
+- **Free signing for open source** (e.g. SignPath Foundation) usually needs an OSI-approved
+  license, which Nyanga's license isn't.
 
 Even when signed, SmartScreen may warn for a while until the signature builds a reputation.
 
@@ -216,12 +219,24 @@ Even when signed, SmartScreen may warn for a while until the signature builds a 
 - Code layout: `core.py` (sites, rate limiting, download pipeline), `builders.py` (output
   formats), `gui.py` (the window), `loader.py` (the cats), `updater.py` (checks GitHub for new
   versions and installs them), `paths.py` (where assets and user data live, from source and in
-  the exe). To add a site, write a class like `FanFox` in `core.py` with `url_re`, `info()`,
-  `page_urls()` and `image()`, and add it to `SITES`.
-- The interface uses the bundled [Fredoka](https://github.com/hafontia/Fredoka-One) font
-  (`assets/fonts`, SIL Open Font License, see `assets/fonts/OFL.txt`). The cats, the icons and
-  the mascot were drawn for this project. The README pictures in `assets/readme` are rendered
-  from the app itself.
+  the exe).
+- To add a site, write a class like `FanFox` in `core.py` with `url_re`, `search()`, `info()`,
+  `page_urls()` and `image()`, and add it to `SITES`. It then shows up as a source to search.
+- Commit messages are [conventional commits](https://www.conventionalcommits.org) (`fix:`,
+  `feat:`, `docs:`...). They decide the next version and become the release notes.
+- Please follow the [code of conduct](CODE_OF_CONDUCT.md) ♡
+
+## ✿ Credits
+
+The interface uses the bundled [Fredoka](https://github.com/hafontia/Fredoka-One) font
+(`assets/fonts`, SIL Open Font License, see `assets/fonts/OFL.txt`). The cats, the icons and
+the mascot were drawn for this project.
+
+## 📜 License
+
+Nyanga is source-available, not open source. You can use it, read the code and fork it to send
+contributions back here, but you can't publish your own version or build another app from it.
+See [LICENSE](LICENSE) for the details.
 
 <p align="center">
   <sub>made with ♡ and a lot of cat drawings</sub>
