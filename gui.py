@@ -105,9 +105,9 @@ class Settings:
 
 class Bridge(QObject):
     """Carries results from worker threads back to the GUI thread."""
-    searched = Signal(int, object, str, list)  # search id, site class, query, SearchResults
+    searched = Signal(int, object, str, int, list, int)  # search id, site class, query, page, SearchResults, pages
     search_failed = Signal(int, str)
-    cover_ready = Signal(int, int, object)  # search id, result index, image bytes (or None)
+    cover_ready = Signal(int, int, object)  # results-page token, result index, image bytes (or None)
     fetched = Signal(object, object)  # site, MangaInfo
     fetch_failed = Signal(str)
     status = Signal(int, str, float, str)  # table row, state, fraction, message
@@ -404,7 +404,15 @@ class DownloadPage(QWidget):
         self.bridge.search_failed.connect(self._on_search_failed)
         self.bridge.cover_ready.connect(self._on_cover)
         self.search_id = 0  # results of older searches are ignored
-        self.results: list[ResultItem] = []
+        self.results: list[ResultItem] = []  # shown right now
+        self.search_site = None
+        self.search_query = ""
+        self.search_pages: dict[int, list] = {}  # results page -> SearchResults, fetched so far
+        self.search_page = 1
+        self.search_total = 1
+        self.search_loading = 0  # results page being fetched, or 0
+        self.cover_token = 0  # covers for an older page are ignored
+        self.cover_cache: dict[str, bytes | None] = {}
         self.bridge.fetched.connect(self._on_fetched)
         self.bridge.fetch_failed.connect(self._on_fetch_failed)
         self.bridge.status.connect(self._on_status)
@@ -473,6 +481,11 @@ class DownloadPage(QWidget):
         rhead = QHBoxLayout()
         rhead.addWidget(label("Pick one ✧", "h2"))
         rhead.addStretch(1)
+        self.results_dots = MiniCat(lambda: CURRENT["mode"])
+        rhead.addWidget(self.results_dots)
+        self.results_wait = label("fetching more ✧", "meta")
+        self.results_wait.hide()
+        rhead.addWidget(self.results_wait)
         self.results_count = label("", "meta")
         rhead.addWidget(self.results_count)
         rl.addLayout(rhead)
@@ -482,6 +495,19 @@ class DownloadPage(QWidget):
         self.results_grid.setColumnStretch(0, 1)
         self.results_grid.setColumnStretch(1, 1)
         rl.addLayout(self.results_grid)
+        rpager = QHBoxLayout()
+        rpager.addStretch(1)
+        self.rprev_btn = QPushButton("‹", objectName="pager")
+        self.rprev_btn.setToolTip("Previous results")
+        self.rprev_btn.clicked.connect(lambda: self._goto_results(self.search_page - 1))
+        self.rpage_lbl = label("", "meta")
+        self.rnext_btn = QPushButton("›", objectName="pager")
+        self.rnext_btn.setToolTip("More results")
+        self.rnext_btn.clicked.connect(lambda: self._goto_results(self.search_page + 1))
+        for w in (self.rprev_btn, self.rpage_lbl, self.rnext_btn):
+            rpager.addWidget(w)
+        rpager.addStretch(1)
+        rl.addLayout(rpager)
         self.results_card.hide()
         col.addWidget(self.results_card)
 
@@ -727,57 +753,122 @@ class DownloadPage(QWidget):
             return
         site_cls = core.site_named(self.source.currentData())
         self.search_id += 1
-        sid = self.search_id
+        self.search_site, self.search_query = site_cls, text
+        self.search_pages, self.search_page, self.search_total, self.search_loading = {}, 1, 1, 0
         self._hint(f"Searching {site_cls.name}…")
         self._start_lookup("Searching…", f"Asking {site_cls.name} for matches ✧")
+        self._search_page(1)
+
+    def _search_page(self, page: int) -> None:
+        sid, site_cls, query = self.search_id, self.search_site, self.search_query
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def work() -> None:
             try:
-                self.bridge.searched.emit(sid, site_cls, text, site_cls.search(text, limiter))
+                results, pages = site_cls.search(query, limiter, page)
+                self.bridge.searched.emit(sid, site_cls, query, page, results, pages)
             except Exception as e:
                 self.bridge.search_failed.emit(sid, str(e))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_search_failed(self, sid: int, message: str) -> None:
-        if sid == self.search_id:
-            self._on_fetch_failed(message)
+    def _goto_results(self, page: int) -> None:
+        if not 1 <= page <= self.search_total or self.search_loading:
+            return
+        if page in self.search_pages:
+            self._show_results_page(page)
+            return
+        self.search_loading = page  # fetch it from the site first
+        self._results_waiting(True)
+        self._search_page(page)
 
-    def _on_searched(self, sid: int, site_cls, query: str, results: list) -> None:
+    def _results_waiting(self, on: bool) -> None:
+        self.results_dots.start() if on else self.results_dots.stop()
+        self.results_wait.setVisible(on)
+        self.results_count.setVisible(not on)
+        self.rprev_btn.setEnabled(not on and self.search_page > 1)
+        self.rnext_btn.setEnabled(not on and self.search_page < self.search_total)
+
+    def _on_search_failed(self, sid: int, message: str) -> None:
         if sid != self.search_id:
             return
-        self._end_lookup()
-        self.fetch_btn.setEnabled(True)
+        if self.search_loading:  # a later page; keep showing this one
+            self.search_loading = 0
+            self._results_waiting(False)
+            self._hint(f"Couldn't get more results: {message}", error=True)
+        else:
+            self._on_fetch_failed(message)
+
+    def _on_searched(self, sid: int, site_cls, query: str, page: int, results: list, pages: int) -> None:
+        if sid != self.search_id:
+            return
+        fresh = not self.search_pages
+        if fresh:
+            self._end_lookup()
+            self.fetch_btn.setEnabled(True)
+            if not results:
+                self._clear_results()
+                self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✧", error=True)
+                return
+            many = f"{pages} pages of matches" if pages > 1 else f"{len(results)} {'match' if len(results) == 1 else 'matches'}"
+            self._hint(f"Found {many} on {site_cls.name}. Pick the one you want ♡")
+        self.search_loading = 0
+        self._results_waiting(False)
+        self.search_total = max(pages, page)
+        if results:
+            self.search_pages[page] = results
+            self._show_results_page(page)
+        else:  # the site ran out sooner than its page links said
+            self.search_total = self.search_page
+            self._results_waiting(False)
+            self._show_results_page(self.search_page)
+        if fresh:
+            self.manga_card.hide()
+            self.files_card.hide()
+            self.results_card.show()
+
+    def _clear_results(self) -> None:
         for item in self.results:
             item.deleteLater()
         self.results = []
-        if not results:
-            self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✧", error=True)
-            return
-        self._hint(f"Found {len(results)} on {site_cls.name}. Pick the one you want ♡")
-        self.results_count.setText(f"{len(results)} {'match' if len(results) == 1 else 'matches'}")
+
+    def _show_results_page(self, page: int) -> None:
+        results = self.search_pages[page]
+        self.search_page = page
+        self._clear_results()
         for i, result in enumerate(results):
             item = ResultItem(result)
             item.clicked.connect(lambda r=result: self._pick(r))
+            if result.cover_url in self.cover_cache:
+                item.set_cover(self.cover_cache[result.cover_url])
             self.results_grid.addWidget(item, i // 2, i % 2)
             self.results.append(item)
-        self.manga_card.hide()
-        self.files_card.hide()
-        self.results_card.show()
+        self.results_count.setText(f"page {page} of {self.search_total}")
+        self.rpage_lbl.setText(f"Page {page} of {self.search_total}")
+        for w in (self.rprev_btn, self.rpage_lbl, self.rnext_btn):
+            w.setVisible(self.search_total > 1)
+        self._results_waiting(False)
+        if page > 1 or self.search_total > 1:
+            bar = self.findChild(QScrollArea).verticalScrollBar()
+            bar.setValue(min(bar.value(), self.results_card.y()))  # back to the top of the results
+        self.cover_token += 1
+        token, site_cls = self.cover_token, self.search_site
+        missing = [(i, r.cover_url) for i, r in enumerate(results) if r.cover_url and r.cover_url not in self.cover_cache]
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def covers() -> None:
             site = site_cls("", limiter)
-            for i, result in enumerate(results):
-                if sid != self.search_id:
-                    return  # a newer search replaced these
-                self.bridge.cover_ready.emit(sid, i, site.cover(result.cover_url) if result.cover_url else None)
+            for i, url in missing:
+                if token != self.cover_token:
+                    return  # another page is showing now
+                self.bridge.cover_ready.emit(token, i, site.cover(url))
 
-        threading.Thread(target=covers, daemon=True).start()
+        if missing:
+            threading.Thread(target=covers, daemon=True).start()
 
-    def _on_cover(self, sid: int, index: int, data) -> None:
-        if sid == self.search_id and index < len(self.results):
+    def _on_cover(self, token: int, index: int, data) -> None:
+        if token == self.cover_token and index < len(self.results):
+            self.cover_cache[self.results[index].result.cover_url] = data
             self.results[index].set_cover(data)
 
     def _pick(self, result: core.SearchResult) -> None:

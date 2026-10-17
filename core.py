@@ -197,10 +197,11 @@ class FanFox:
         return info
 
     @classmethod
-    def search(cls, query: str, limiter: RateLimiter) -> list[SearchResult]:
-        """Titles matching a name, closest matches first."""
+    def search(cls, query: str, limiter: RateLimiter, page_no: int = 1) -> tuple[list[SearchResult], int]:
+        """One page of titles matching a name (closest matches first on page 1), and how many pages there are."""
         site = cls("", limiter)
-        page = site._get("https://fanfox.net/search?" + urlencode({"title": query.strip()})).text
+        page = site._get("https://fanfox.net/search?" + urlencode({"title": query.strip(), "page": page_no})).text
+        pages = max([page_no] + [int(n) for n in re.findall(r'/search\?page=(\d+)&', page)])
         results = []
         for slug, cover, item in ((m.group(1).lower(), m.group(2), m.group(0)) for m in cls._result_re.finditer(page)):
             title = re.search(r'class="manga-list-4-item-title"><a [^>]*title="([^"]+)"', item)
@@ -216,8 +217,10 @@ class FanFox:
                 author=html.unescape(author.group(1)).strip() if author else "",
             ))
         # The site's own order puts spin-offs before the title itself; exact and prefix matches go first.
-        wanted = query.strip().lower()
-        return sorted(results, key=lambda r: (r.title.lower() != wanted, not r.title.lower().startswith(wanted)))
+        if page_no == 1:
+            wanted = query.strip().lower()
+            results.sort(key=lambda r: (r.title.lower() != wanted, not r.title.lower().startswith(wanted)))
+        return results, pages if results else page_no
 
     def cover(self, url: str) -> bytes | None:
         try:

@@ -121,7 +121,7 @@ Python 3.10+. Dependencies: requests, pillow, img2pdf, PySide6. There are no tes
   Paw clicks (toggle, shift-click, drag) go through `DownloadPage.eventFilter`; the check items
   are deliberately not `ItemIsUserCheckable`.
 - Adding a site: write a class like `FanFox` (`name`, `example`, `url_re`, a `search(query,
-  limiter)` classmethod returning `SearchResult`s, chapter/image fetching) and append it to
+  limiter, page_no)` classmethod returning `(SearchResult list, page count)`, chapter/image fetching) and append it to
   `SITES` in `core.py`. It then shows up in the source pickers on the Download and Settings pages.
 - New colors go in both palettes in `theme.py`; use `theme.color(mode, name)` rather than
   hard-coded colors so light/dark both work.

@@ -118,8 +118,8 @@ closed, that spot shows the delivery cat and how far along it is:
 **Download page**
 
 1. Pick a source, type the manga's name and press **Search**. Click the right one in the
-   results; its cover, title, genres and chapter count appear. **Back to results** lets you
-   pick another. Pasting a title link instead of a name works too.
+   results (use ‹ › under them for more); its cover, title, genres and chapter count appear.
+   **Back to results** lets you pick another. Pasting a title link instead of a name works too.
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
    title, how many chapters go in each file.
 3. Tap the paws of the files you want. Shift-click a paw to tick everything since the last one
