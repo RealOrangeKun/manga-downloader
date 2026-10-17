@@ -8,3 +8,5 @@ library/
 build/
 dist/
 notes.md
+CLAUDE.md
+.claude/
