@@ -1627,6 +1627,12 @@ class LibraryPage(QWidget):
             retry.setToolTip(f"Try the {len(failed)} chapters that failed again")
             retry.clicked.connect(lambda: self.open_requested.emit(url, "retry"))
             buttons.addWidget(retry)
+        folder = self._folder(entry)
+        folder_btn = set_icon(QPushButton(" Folder"), "folder")
+        folder_btn.setEnabled(folder is not None)
+        folder_btn.setToolTip(f"Show the files in {folder}" if folder else "Nothing downloaded yet ✧")
+        folder_btn.clicked.connect(lambda: self._open_folder(key))
+        buttons.addWidget(folder_btn)
         open_btn = set_icon(QPushButton(" Open"), "library")
         open_btn.setToolTip("Open it on the Download page to pick more chapters")
         open_btn.clicked.connect(lambda: self.open_requested.emit(url, "open"))
@@ -1638,6 +1644,21 @@ class LibraryPage(QWidget):
         self.cards[key] = {"bar": bar, "meta": meta, "when": when, "badge": badge, "cat": cat}
         self._fill(key)
         return frame
+
+    @staticmethod
+    def _folder(entry: dict) -> Path | None:
+        """Where this manga's files are: next to its downloaded files, else where the last download went."""
+        folder = History.folder(entry)
+        if folder is None and entry.get("last_run", {}).get("save_to"):
+            folder = Path(entry["last_run"]["save_to"]).expanduser() / core.safe_name(entry.get("title", ""))
+        return folder if folder and folder.is_dir() else None
+
+    def _open_folder(self, key: str) -> None:
+        folder = self._folder(self.history.get(key) or {})
+        if folder:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        else:
+            self.refresh()  # it was moved or deleted; the button turns grey
 
     def _fill(self, key: str) -> None:
         entry, w = self.history.get(key), self.cards.get(key)

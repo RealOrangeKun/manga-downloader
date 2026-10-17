@@ -119,6 +119,15 @@ class History:
         if changed:
             self.save()
 
+    @staticmethod
+    def folder(entry: dict) -> Path | None:
+        """The folder holding most of a manga's downloaded files that still exist."""
+        counts: dict[Path, int] = {}
+        for f in entry.get("downloaded", {}).values():
+            if Path(f).exists():
+                counts[Path(f).parent] = counts.get(Path(f).parent, 0) + 1
+        return max(counts, key=counts.get) if counts else None
+
     def forget(self, key: str) -> None:
         """Remove a manga from the library. Its downloaded files are left alone."""
         self.data.pop(key, None)

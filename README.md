@@ -145,6 +145,7 @@ Every manga you've downloaded gets a card with its cover, how much of the series
 
 - **Continue** picks up chapters from a download that was cancelled or interrupted.
 - **Retry failed** downloads the chapters that failed again.
+- **Folder** opens the folder with that manga's downloaded files.
 - **Open** loads the manga on the Download page with what you already have marked, so you can
   pick more.
 - Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
