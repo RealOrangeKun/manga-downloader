@@ -6,6 +6,7 @@ import html
 import json
 import math
 import os
+import random
 import re
 import sys
 import threading
@@ -14,7 +15,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 import requests
-from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
@@ -1924,6 +1925,52 @@ class Notification(QWidget):
         super().leaveEvent(event)
 
 
+class MascotLogo(QWidget):
+    """The sidebar cat. Click it and it hops, squishing a little when it takes off and lands."""
+    clicked = Signal()
+    SIZE = 48
+    HOP = 10  # room above the cat for the hop
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedSize(self.SIZE + 8, self.SIZE + self.HOP)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Boop ♡")
+        self.pixmap = theme.app_pixmap(96)
+        self.t = 0.0
+        self.anim = QVariantAnimation(self, startValue=0.0, endValue=1.0, duration=650)
+        self.anim.valueChanged.connect(self._step)
+
+    def _step(self, t: float) -> None:
+        self.t = t
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.anim.stop()
+            self.anim.start()
+            self.clicked.emit()
+
+    def paintEvent(self, event) -> None:
+        t = self.t if self.anim.state() == QVariantAnimation.Running else 0.0
+        lift = math.sin(math.pi * min(1.0, t / 0.8)) * self.HOP  # up and back down in the first 80%
+        squish = 0.0
+        if t < 0.15:  # crouch before jumping
+            squish = math.sin(math.pi * t / 0.15) * 0.12
+        elif t > 0.8:  # land
+            squish = math.sin(math.pi * (t - 0.8) / 0.2) * 0.14
+        wiggle = math.sin(2 * math.pi * t * 2) * 7 * (1 - t)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        base = QRectF(4, self.HOP, self.SIZE, self.SIZE)
+        p.translate(base.center().x(), base.bottom() - lift)  # squish and tilt around the cat's feet
+        p.rotate(wiggle)
+        p.scale(1 + squish, 1 - squish)
+        p.drawPixmap(QRectF(-self.SIZE / 2, -self.SIZE, self.SIZE, self.SIZE), self.pixmap, QRectF(self.pixmap.rect()))
+        p.end()
+
+
 class UpdatePill(QFrame):
     """Top right: an update that was put off (press to update), or one on its way while its card is closed."""
     clicked = Signal()
@@ -2001,18 +2048,23 @@ class MainWindow(QWidget):
         side = QFrame(objectName="sidebar")
         side.setFixedWidth(220)
         sl = QVBoxLayout(side)
-        sl.setContentsMargins(18, 26, 18, 18)
+        sl.setContentsMargins(18, 26 - MascotLogo.HOP, 18, 18)  # the cat keeps room above it to hop into
         sl.setSpacing(6)
         brand = QHBoxLayout()
-        brand.setSpacing(10)
-        mascot = QLabel()
-        mascot.setPixmap(theme.app_pixmap(96).scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        brand.addWidget(mascot)
-        brand.addWidget(label("Nyanga", "logo"))
+        brand.setSpacing(6)  # 10, less the room the cat keeps beside it to wiggle
+        mascot = MascotLogo()
+        mascot.clicked.connect(self._mascot_clicked)
+        brand.addWidget(mascot, 0, Qt.AlignBottom)
+        logo = label("Nyanga", "logo")
+        logo.setFixedHeight(MascotLogo.SIZE)  # centred on the cat, not on the room it hops into
+        brand.addWidget(logo, 0, Qt.AlignBottom)
         brand.addStretch(1)
         sl.addLayout(brand)
         sl.addSpacing(4)
-        sl.addWidget(label("cute & cozy ✧", "tagline"))
+        self.tagline = label("cute & cozy ✧", "tagline")
+        sl.addWidget(self.tagline)
+        self.tagline_reset = QTimer(self, singleShot=True, interval=1800)
+        self.tagline_reset.timeout.connect(lambda: self.tagline.setText("cute & cozy ✧"))
         sl.addSpacing(22)
         self.stack = QStackedWidget()
         self.history = History()
@@ -2123,6 +2175,13 @@ class MainWindow(QWidget):
             pass  # the toggle still works for this session
         self.settings_page._update_dirty()
         self.apply_theme(self.settings.theme)
+
+    MEOWS = ["nya~ ♡", "mrrp! ✧", "purr purr ♡", "meow? ✿", "*happy tail swish* ✧", "nyaa~ ✿"]
+
+    def _mascot_clicked(self) -> None:
+        options = [m for m in self.MEOWS if m != self.tagline.text()]
+        self.tagline.setText(random.choice(options))
+        self.tagline_reset.start()
 
     def _settings_saved(self, old: Settings) -> None:
         self.apply_theme(self.settings.theme)

@@ -84,6 +84,8 @@ so they follow the light and dark theme.
   </tr>
 </table>
 
+Psst: give the cat in the top-left corner a tap ♡
+
 ## 💝 Install (Windows)
 
 1. Open the [latest release](https://github.com/RealOrangeKun/nyanga/releases/latest) and
