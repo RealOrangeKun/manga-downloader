@@ -2662,8 +2662,15 @@ class WhatsNew(QDialog):
         ok.setCursor(Qt.PointingHandCursor)
         ok.clicked.connect(self.accept)
         outer.addWidget(ok, 0, Qt.AlignHCenter)
-        body.adjustSize()
-        self.resize(self.width(), min(self.sizeHint().height() + body.sizeHint().height(), 680))
+        # Work out the size once and lock it: with wrapped text the window's height depends on its
+        # width, and on scaled Windows displays it kept resizing itself (see-through and jumpy)
+        # before settling.
+        self.ensurePolished()
+        margins = outer.contentsMargins()
+        room = self.width() - margins.left() - margins.right() - scroll.verticalScrollBar().sizeHint().width()
+        fill = body.heightForWidth(room) if body.hasHeightForWidth() else body.sizeHint().height()
+        rest = self.sizeHint().height() - scroll.sizeHint().height()  # cat, titles, button, spacing
+        self.setFixedSize(self.width(), min(rest + fill, 680))
 
     @staticmethod
     def _item(item: dict) -> QFrame:
