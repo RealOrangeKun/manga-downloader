@@ -636,6 +636,14 @@ class DownloadPage(QWidget):
         right.addLayout(title_row)
         right.addWidget(self.meta_lbl)
         right.addLayout(self.chips)
+        self.about_lbl = label("", "about", wrap=True)
+        self.about_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.about_more = QPushButton("Read more ✧", objectName="link")
+        self.about_more.setCursor(Qt.PointingHandCursor)
+        self.about_more.clicked.connect(lambda: self._show_about(not self.about_open))
+        self.about_open = False
+        right.addWidget(self.about_lbl)
+        right.addWidget(self.about_more, 0, Qt.AlignLeft)
         right.addSpacing(6)
         form = form_layout()
         self.fmt = combo_box()
@@ -1064,6 +1072,7 @@ class DownloadPage(QWidget):
         for g in info.genres[:6]:
             self.chips.addWidget(label(g, "chip"))
         self.chips.addStretch(1)
+        self._show_about(False)
         self.fmt.setCurrentIndex(max(0, self.fmt.findData(self.settings.default_format)))
         self.save_to.setText(self.settings.download_dir)
 
@@ -1168,6 +1177,19 @@ class DownloadPage(QWidget):
             self._start()
         else:
             self._status("Nothing left to download ♡")
+
+    ABOUT_SHORT = 320  # characters of the description shown before "Read more"
+
+    def _show_about(self, full: bool) -> None:
+        text = self.info.description if self.info else ""
+        long = len(text) > self.ABOUT_SHORT
+        self.about_open = full and long
+        if long and not full:
+            text = text[:self.ABOUT_SHORT].rsplit(" ", 1)[0].rstrip(".,;: ") + "…"
+        self.about_lbl.setText(text)
+        self.about_lbl.setVisible(bool(text))
+        self.about_more.setText("Show less" if self.about_open else "Read more ✧")
+        self.about_more.setVisible(long)
 
     def refresh_cover(self) -> None:
         if self.info:

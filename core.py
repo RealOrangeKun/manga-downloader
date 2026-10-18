@@ -53,6 +53,7 @@ class MangaInfo:
     cover: bytes | None = None
     status: str = ""
     genres: list[str] = field(default_factory=list)
+    description: str = ""
 
 
 @dataclass
@@ -108,6 +109,7 @@ class FanFox:
     _title_re = re.compile(r'class="detail-info-right-title-font">([^<]+)<')
     _status_re = re.compile(r'class="detail-info-right-title-tip">([^<]+)<')
     _genres_re = re.compile(r'<p class="detail-info-right-tag-list">(.*?)</p>', re.S)
+    _desc_res = [re.compile(rf'<p [^>]*class="{c}">(.*?)</p>', re.S) for c in ("fullcontent", "detail-info-right-content")]
     _cover_re = re.compile(r'<img class="detail-info-cover-img" src="([^"]+)"')
     _image_re = re.compile(r'data-original="([^"]+)"')
     _result_re = re.compile(r'<li>\s*<a href="/manga/([a-z0-9_]+)/"[^>]*><img class="manga-list-4-cover" '
@@ -182,11 +184,13 @@ class FanFox:
             found[path] = Chapter(float(num), int(vol) if vol.isdigit() else NO_VOLUME, path)
         status = self._status_re.search(page)
         genres = self._genres_re.search(page)
+        desc = next(filter(None, (r.search(page) for r in self._desc_res)), None)  # the full one if it's there
         info = MangaInfo(
             title=html.unescape(title.group(1)).strip() if title else self.slug.replace("_", " ").title(),
             chapters=sorted(found.values(), key=lambda c: (c.number, c.url)),
             status=status.group(1).strip() if status else "",
-            genres=re.findall(r'title="([^"]+)"', genres.group(1)) if genres else [],
+            genres=[html.unescape(g) for g in re.findall(r'title="([^"]+)"', genres.group(1))] if genres else [],
+            description=_plain(desc.group(1)) if desc else "",
         )
         cover = self._cover_re.search(page) if with_cover else None
         if cover:
@@ -262,6 +266,13 @@ def site_named(name: str):
 
 
 # --------------------------------------------------------------------------- planning
+
+
+def _plain(fragment: str) -> str:
+    """Text from a bit of HTML: line breaks kept, tags dropped, runs of spaces squeezed."""
+    text = html.unescape(re.sub(r"<[^>]+>", "", re.sub(r"<br\s*/?>", "\n", fragment, flags=re.I)))
+    lines = (" ".join(line.split()) for line in text.splitlines())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 def fmt_num(n: float) -> str:

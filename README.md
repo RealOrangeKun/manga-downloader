@@ -35,7 +35,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/readme/screenshot-dark.png">
-    <img src="assets/readme/screenshot-light.png" width="860" alt="The Download page with Onepunch-Man looked up: cover, genres, format and a table of 45 files">
+    <img src="assets/readme/screenshot-light.png" width="860" alt="The Download page with Onepunch-Man looked up: cover, genres, description, format and a table of 45 files">
   </picture>
 </p>
 
@@ -139,7 +139,8 @@ closed, that spot shows the delivery cat and how far along it is:
 
 1. Pick a source, type the manga's name and press **Search**. Click the right one in the
    results (use ‹ › under them for more, and the buttons next to **Pick one** to switch between a
-   list and a grid of covers and pick their size); its cover, title, genres and chapter count appear.
+   list and a grid of covers and pick their size); its cover, title, genres, description
+   (**Read more** for all of it) and chapter count appear.
    **Back to results** lets you pick another. Pasting a title link instead of a name works too.
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
    title, how many chapters go in each file.
