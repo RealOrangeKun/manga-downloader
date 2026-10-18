@@ -31,15 +31,15 @@ def render(mode: str, out: Path, data: Path) -> None:
 
     from PySide6.QtCore import QTimer
     from PySide6.QtGui import QImage
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QPushButton
 
     import gui
     import theme
 
-    gui.__version__ = "1.0.0"  # a real-looking number instead of 0.0.0-dev
     app = QApplication(["nyanga"])
     app.setFont(theme.load_font())
     window = gui.MainWindow()
+    window.findChild(QPushButton, "version").hide()  # it would go out of date
     window.resize(*SIZE)
     window.show()
     page = window.download
