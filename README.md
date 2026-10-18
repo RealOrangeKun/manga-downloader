@@ -26,6 +26,7 @@
 
 <p align="center">
   <a href="https://github.com/nyanga-app/nyanga-app/releases/latest"><b>⬇ Download for Windows or Linux</b></a>
+  &nbsp;·&nbsp; <a href="https://nyanga.page">Website</a>
   &nbsp;·&nbsp; <a href="#-using-it">How to use it</a>
   &nbsp;·&nbsp; <a href="#-run-from-source">Run from source</a>
 </p>
