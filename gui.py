@@ -1038,7 +1038,7 @@ class DownloadPage(QWidget):
     # ---- fetching
 
     def _idle_hint(self) -> str:
-        return f"Searching {self.source.currentData()}. A link to a title works too ✧"
+        return "Pasting a link to a title works too ✧"
 
     def _start_lookup(self, title: str, text: str) -> None:
         self.lookup_title.setText(title)
