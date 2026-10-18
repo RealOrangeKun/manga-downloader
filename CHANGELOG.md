@@ -2,6 +2,14 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.8.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.0) (2026-10-18)
+
+### New
+- installer: the installer no longer asks about importing settings from an old copy
+
+### Fixes
+- settings: you can leave the Settings page again after changing how search results look
+
 ## [1.7.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.7.0) (2026-10-18)
 
 ### New
