@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 from dataclasses import asdict, dataclass, fields, replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import requests
@@ -2641,7 +2641,7 @@ class WhatsNew(QDialog):
         col.setSpacing(8)
         for release in releases:
             if len(releases) > 1:
-                day = date.fromisoformat(release["date"])
+                day = self._day(release)
                 col.addSpacing(6)
                 col.addWidget(label(f"Version {release['version']}  ·  {day:%B} {day.day}, {day.year}", "h2"))
             kind = None
@@ -2671,6 +2671,13 @@ class WhatsNew(QDialog):
         fill = body.heightForWidth(room) if body.hasHeightForWidth() else body.sizeHint().height()
         rest = self.sizeHint().height() - scroll.sizeHint().height()  # cat, titles, button, spacing
         self.setFixedSize(self.width(), min(rest + fill, 680))
+
+    @staticmethod
+    def _day(release: dict) -> date:
+        """The release's date where this computer is (`time` is UTC; older notes only have `date`)."""
+        if "time" in release:
+            return datetime.fromisoformat(release["time"].replace("Z", "+00:00")).astimezone().date()
+        return date.fromisoformat(release["date"])
 
     @staticmethod
     def _item(item: dict) -> QFrame:

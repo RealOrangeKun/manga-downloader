@@ -19,7 +19,7 @@ import json
 import os
 import re
 import subprocess
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -135,30 +135,36 @@ def sections(notes: dict[str, list[Change]]) -> list[str]:
             for key, heading in SECTIONS if notes[key]]
 
 
+def utc(moment: datetime) -> str:
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def releases(pending: str) -> list[tuple[str, dict[str, list[Change]], str]]:
-    """(version, changes, date) for every tag, newest first, with `pending` (not tagged yet) on top."""
+    """(version, changes, UTC time) for every tag, newest first, with `pending` (not tagged yet) on top.
+    The time is the moment, not a date, so the app and site can show each reader their own day."""
     found, prev = [], None
     for tag, _ in tags():
-        found.append((tag[1:], classify(commits(prev, tag))[1], git("log", "-1", "--format=%cs", tag).strip()))
+        when = datetime.fromisoformat(git("log", "-1", "--format=%cI", tag).strip())
+        found.append((tag[1:], classify(commits(prev, tag))[1], utc(when)))
         prev = tag
     if pending:
-        found.append((pending, classify(commits(prev))[1], date.today().isoformat()))
+        found.append((pending, classify(commits(prev))[1], utc(datetime.now(timezone.utc))))
     return found[::-1]
 
 
 def whats_new(pending: str) -> str:
     """Every release's changes as JSON, newest first, for the app's What's new screen."""
-    return json.dumps([{"version": version, "date": day,
+    return json.dumps([{"version": version, "date": when[:10], "time": when,
                         "items": [c.friendly(key) for key, _ in SECTIONS for c in notes[key]]}
-                       for version, notes, day in releases(pending)], indent=1, ensure_ascii=False)
+                       for version, notes, when in releases(pending)], indent=1, ensure_ascii=False)
 
 
 def changelog(pending: str) -> str:
     """CHANGELOG.md rebuilt from every tag, newest first, with `pending` (not tagged yet) on top."""
     parts = ["# Changelog\n\nWritten by the release workflow from the commit messages. "
              "Each version is a [GitHub Release](" + REPO + "/releases) with its installer.\n"]
-    for version, notes, day in releases(pending):
-        parts.append(f"## [{version}]({REPO}/releases/tag/v{version}) ({day})\n")
+    for version, notes, when in releases(pending):
+        parts.append(f"## [{version}]({REPO}/releases/tag/v{version}) ({when[:10]})\n")
         parts.extend(sections(notes) or ["Small changes behind the scenes.\n"])
     return "\n".join(parts)
 
