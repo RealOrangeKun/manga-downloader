@@ -2,7 +2,12 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
-## [1.8.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.0) (2026-10-18)
+## [1.8.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.1) (2026-10-18)
+
+### Fixes
+- the What's new window opens cleanly instead of flickering and jumping first
+
+## [1.8.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.0) (2026-10-19)
 
 ### New
 - installer: the installer no longer asks about importing settings from an old copy
