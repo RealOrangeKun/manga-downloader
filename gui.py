@@ -482,6 +482,94 @@ class TagRow(QWidget):
             self.more.setGeometry(x, 2, self.more.sizeHint().width(), self.more.sizeHint().height())
 
 
+class FilterPanel(QFrame):
+    """Search filters: genres to want or leave out, kind, status and rating, for sites that have them."""
+    changed = Signal()
+
+    STATES = ["", "in", "out"]  # a genre tap cycles through these
+    RATINGS = [("Any rating", 0), ("2 stars or more", 2), ("3 stars or more", 3), ("4 stars or more", 4)]
+
+    def __init__(self):
+        super().__init__()
+        col = QVBoxLayout(self)
+        col.setContentsMargins(0, 6, 0, 0)
+        col.setSpacing(10)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.kind, self.status, self.rating = combo_box(), combo_box(), combo_box()
+        self.kind.setToolTip("Where it's from")
+        for text, value in (("Ongoing or finished", ""), ("Still ongoing", core.ONGOING), ("Finished", core.COMPLETED)):
+            self.status.addItem(text, value)
+        for text, value in self.RATINGS:
+            self.rating.addItem(text, value)
+        for box in (self.kind, self.status, self.rating):
+            box.currentIndexChanged.connect(lambda *_: self.changed.emit())
+            row.addWidget(box)
+        row.addStretch(1)
+        self.clear_btn = QPushButton("Clear filters", objectName="link")
+        self.clear_btn.setCursor(Qt.PointingHandCursor)
+        self.clear_btn.clicked.connect(self.clear)
+        row.addWidget(self.clear_btn)
+        col.addLayout(row)
+        col.addWidget(label("Genres: tap once for ones you want, twice to leave them out ✿", "hint", wrap=True))
+        self.grid = QGridLayout()
+        self.grid.setSpacing(6)
+        col.addLayout(self.grid)
+        self.genres: dict[str, QPushButton] = {}
+        self.set_site(core.SITES[0])
+
+    def set_site(self, site_cls) -> None:
+        """Offer what this site can filter by; filters it doesn't have are dropped."""
+        self.blockSignals(True)
+        self.kind.clear()
+        self.kind.addItem("Any kind", "")
+        for k in getattr(site_cls, "kinds", []):
+            self.kind.addItem(k, k)
+        for btn in self.genres.values():
+            btn.deleteLater()
+        self.genres = {}
+        for i, g in enumerate(getattr(site_cls, "genres", [])):
+            btn = QPushButton(g, objectName="genre")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setProperty("state", "")
+            btn.clicked.connect(lambda _=False, b=btn: self._cycle(b))
+            self.genres[g] = btn
+            self.grid.addWidget(btn, i // 6, i % 6)
+        self.blockSignals(False)
+        self.changed.emit()
+
+    @staticmethod
+    def supports(site_cls) -> bool:
+        return bool(getattr(site_cls, "genres", None))
+
+    def _cycle(self, btn: QPushButton) -> None:
+        state = self.STATES[(self.STATES.index(btn.property("state")) + 1) % len(self.STATES)]
+        btn.setProperty("state", state)
+        btn.setToolTip({"in": "Only titles with this", "out": "No titles with this"}.get(state, ""))
+        repolish(btn)
+        self.changed.emit()
+
+    def clear(self) -> None:
+        self.blockSignals(True)
+        for box in (self.kind, self.status, self.rating):
+            box.setCurrentIndex(0)
+        for btn in self.genres.values():
+            btn.setProperty("state", "")
+            btn.setToolTip("")
+            repolish(btn)
+        self.blockSignals(False)
+        self.changed.emit()
+
+    def filters(self) -> core.SearchFilters:
+        picked = lambda state: [g for g, b in self.genres.items() if b.property("state") == state]
+        return core.SearchFilters(genres=picked("in"), without=picked("out"), kind=self.kind.currentData() or "",
+                                  status=self.status.currentData() or "", rating=self.rating.currentData() or 0)
+
+    def count(self) -> int:
+        f = self.filters()
+        return len(f.genres) + len(f.without) + sum(1 for x in (f.kind, f.status, f.rating) if x)
+
+
 class SortHeader(QHeaderView):
     """Column titles with room for a small sort arrow next to each, so sorting never shifts the text."""
     ARROW = 16  # room kept in every column
@@ -592,6 +680,7 @@ class DownloadPage(QWidget):
         self.results: list[ResultItem] = []  # shown right now
         self.search_site = None
         self.search_query = ""
+        self.search_filters = core.SearchFilters()
         self.search_pages: dict[int, list] = {}  # results page -> SearchResults, fetched so far
         self.search_page = 1
         self.search_total = 1
@@ -643,15 +732,23 @@ class DownloadPage(QWidget):
             self.source.addItem(site.name, site.name)
         self.source.setCurrentIndex(max(0, self.source.findData(settings.default_source)))
         self.source.setToolTip("Where to search")
-        self.source.currentIndexChanged.connect(lambda *_: self._hint(self._idle_hint()))
+        self.source.currentIndexChanged.connect(self._source_changed)
         self.query = QLineEdit(placeholderText="Type a manga name, like One Piece ✧", maxLength=200)
         self.query.returnPressed.connect(self._find)
         self.fetch_btn = set_icon(QPushButton(" Search", objectName="primary"), "search", "white")
         self.fetch_btn.clicked.connect(self._find)
+        self.filter_btn = set_icon(QPushButton(" Filters", checkable=True), "filter")
+        self.filter_btn.setToolTip("Narrow the search down by genre, kind, status or rating")
         row.addWidget(self.source)
         row.addWidget(self.query, 1)
+        row.addWidget(self.filter_btn)
         row.addWidget(self.fetch_btn)
         fl.addLayout(row)
+        self.filters = FilterPanel()
+        self.filters.hide()
+        self.filters.changed.connect(self._filters_changed)
+        self.filter_btn.toggled.connect(self.filters.setVisible)
+        fl.addWidget(self.filters)
         hint_row = QHBoxLayout()
         self.back_btn = set_icon(QPushButton(" Back to results"), "list")
         self.back_btn.clicked.connect(self._show_results)
@@ -661,6 +758,7 @@ class DownloadPage(QWidget):
         hint_row.addWidget(self.find_hint, 1)
         fl.addLayout(hint_row)
         col.addWidget(find)
+        self._source_changed()
 
         # search results
         self.results_card, rl = card()
@@ -949,15 +1047,32 @@ class DownloadPage(QWidget):
         self.lookup_card.show()
         self.lookup_cat.start()
 
+    def _source_changed(self) -> None:
+        site_cls = core.site_named(self.source.currentData())
+        self.filters.set_site(site_cls)
+        self.filter_btn.setVisible(FilterPanel.supports(site_cls))
+        if not FilterPanel.supports(site_cls):
+            self.filter_btn.setChecked(False)
+        self._hint(self._idle_hint())
+
+    def _filters_changed(self) -> None:
+        n = self.filters.count()
+        self.filter_btn.setText(f" Filters ({n})" if n else " Filters")
+        self.filters.clear_btn.setVisible(bool(n))
+        self.query.setPlaceholderText("Type a manga name, or leave it empty to browse ✧" if n
+                                      else "Type a manga name, like One Piece ✧")
+
     def _find(self) -> None:
         text = self.query.text().strip()
-        if not text:
-            self._hint("Type a manga name first", error=True)
+        site_cls = core.site_named(self.source.currentData())
+        filters = self.filters.filters() if FilterPanel.supports(site_cls) else core.SearchFilters()
+        if not text and not filters:
+            self._hint("Type a manga name first, or pick some filters ✧", error=True)
             return
         if core.site_for(text):
             self._fetch(text)
             return
-        if len(text) < 2:
+        if text and len(text) < 2:
             self._hint("Type at least 2 letters of the name", error=True)
             return
         if len(text) > 100:
@@ -967,21 +1082,21 @@ class DownloadPage(QWidget):
             self._hint("That isn't a title link from a supported site: "
                        + ", ".join(s.example for s in core.SITES), error=True)
             return
-        site_cls = core.site_named(self.source.currentData())
         self.search_id += 1
-        self.search_site, self.search_query = site_cls, text
+        self.search_site, self.search_query, self.search_filters = site_cls, text, filters
         self.search_pages, self.search_page, self.search_total, self.search_loading = {}, 1, 1, 0
         self._hint(f"Searching {site_cls.name}…")
-        self._start_lookup("Searching…", f"Asking {site_cls.name} for matches ✧")
+        self._start_lookup("Searching…" if text else "Browsing…", f"Asking {site_cls.name} for matches ✧")
         self._search_page(1)
 
     def _search_page(self, page: int) -> None:
-        sid, site_cls, query = self.search_id, self.search_site, self.search_query
+        sid, site_cls, query, filters = self.search_id, self.search_site, self.search_query, self.search_filters
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def work() -> None:
             try:
-                results, pages = site_cls.search(query, limiter, page)
+                results, pages = site_cls.search(query, limiter, page, filters) if filters \
+                    else site_cls.search(query, limiter, page)
                 self.bridge.searched.emit(sid, site_cls, query, page, results, pages)
             except Exception as e:
                 self.bridge.search_failed.emit(sid, str(e))
@@ -1024,7 +1139,11 @@ class DownloadPage(QWidget):
             self.fetch_btn.setEnabled(True)
             if not results:
                 self._clear_results()
-                self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✧", error=True)
+                if self.search_filters:
+                    self._hint(f"Nothing on {site_cls.name} fits those filters. Try loosening them a little ✧",
+                               error=True)
+                else:
+                    self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✧", error=True)
                 return
             many = f"{pages} pages of matches" if pages > 1 else f"{len(results)} {'match' if len(results) == 1 else 'matches'}"
             self._hint(f"Found {many} on {site_cls.name}. Pick the one you want ♡")
@@ -1690,7 +1809,7 @@ class DownloadPage(QWidget):
     # ---- downloading
 
     def _set_locked(self, locked: bool) -> None:
-        for w in (self.source, self.query, self.fetch_btn, self.fmt, self.per_file, self.save_to, self.select_btn,
+        for w in (self.source, self.query, self.fetch_btn, self.filter_btn, self.filters, self.fmt, self.per_file, self.save_to, self.select_btn,
                   self.page_btn, self.range_unit, self.range_from, self.range_to, self.range_btn, self.lib_btn):
             w.setEnabled(not locked)
         self.table.setEnabled(True)  # paws ignore clicks while running (see eventFilter)

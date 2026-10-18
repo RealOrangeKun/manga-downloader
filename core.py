@@ -58,6 +58,22 @@ class MangaInfo:
 
 
 @dataclass
+class SearchFilters:
+    """Narrows a search down; names come from the site's `genres` and `kinds`, empty means any."""
+    genres: list[str] = field(default_factory=list)
+    without: list[str] = field(default_factory=list)  # genres to leave out
+    kind: str = ""
+    status: str = ""  # "", ONGOING or COMPLETED
+    rating: int = 0  # at least this many stars, 0 for any
+
+    def __bool__(self) -> bool:
+        return bool(self.genres or self.without or self.kind or self.status or self.rating)
+
+
+ONGOING, COMPLETED = "Ongoing", "Completed"
+
+
+@dataclass
 class SearchResult:
     """One title in a site's search results."""
     title: str
@@ -119,6 +135,13 @@ class FanFox:
     _image_re = re.compile(r'data-original="([^"]+)"')
     _result_re = re.compile(r'<li>\s*<a href="/manga/([a-z0-9_]+)/"[^>]*><img class="manga-list-4-cover" '
                             r'src="([^"]*)".*?</li>', re.S | re.I)
+    genres = ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Martial Arts", "Shounen", "Horror",
+              "Supernatural", "Harem", "Psychological", "Romance", "School Life", "Shoujo", "Mystery", "Sci-fi",
+              "Seinen", "Tragedy", "Ecchi", "Sports", "Slice of Life", "Mature", "Shoujo Ai", "Webtoons",
+              "Doujinshi", "One Shot", "Smut", "Yaoi", "Josei", "Historical", "Shounen Ai", "Gender Bender",
+              "Adult", "Yuri", "Mecha", "Lolicon", "Shotacon"]  # in the site's id order, starting at 1
+    kinds = ["Japanese Manga", "Korean Manhwa", "Chinese Manhua", "European Manga", "American Manga",
+             "HongKong Manga", "Other Manga"]
     _user_agent = ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/129.0 Mobile Safari/537.36")
 
@@ -208,10 +231,20 @@ class FanFox:
         return info
 
     @classmethod
-    def search(cls, query: str, limiter: RateLimiter, page_no: int = 1) -> tuple[list[SearchResult], int]:
-        """One page of titles matching a name (closest matches first on page 1), and how many pages there are."""
+    def search(cls, query: str, limiter: RateLimiter, page_no: int = 1,
+               filters: SearchFilters | None = None) -> tuple[list[SearchResult], int]:
+        """One page of titles matching a name (closest matches first on page 1), and how many pages there are.
+        With filters the name may be empty, to browse everything that fits them."""
         site = cls("", limiter)
-        page = site._get("https://fanfox.net/search?" + urlencode({"title": query.strip(), "page": page_no})).text
+        params = {"title": query.strip(), "page": page_no}
+        if filters:
+            ids = lambda names: ",".join(str(cls.genres.index(g) + 1) for g in names if g in cls.genres)
+            params.update(stype=1, genres=ids(filters.genres), nogenres=ids(filters.without),
+                          type=cls.kinds.index(filters.kind) + 1 if filters.kind in cls.kinds else 0,
+                          st={ONGOING: 1, COMPLETED: 2}.get(filters.status, 0))
+            if filters.rating:
+                params.update(rating_method="gt", rating=filters.rating - 1)
+        page = site._get("https://fanfox.net/search?" + urlencode(params)).text
         pages = max([page_no] + [int(n) for n in re.findall(r'/search\?page=(\d+)&', page)])
         results = []
         for slug, cover, item in ((m.group(1).lower(), m.group(2), m.group(0)) for m in cls._result_re.finditer(page)):
@@ -228,7 +261,7 @@ class FanFox:
                 author=html.unescape(author.group(1)).strip() if author else "",
             ))
         # The site's own order puts spin-offs before the title itself; exact and prefix matches go first.
-        if page_no == 1:
+        if page_no == 1 and query.strip():
             wanted = query.strip().lower()
             results.sort(key=lambda r: (r.title.lower() != wanted, not r.title.lower().startswith(wanted)))
         return results, pages if results else page_no

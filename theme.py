@@ -94,6 +94,10 @@ QPushButton:disabled { background: $disabled_bg; color: $disabled_text; }
 QPushButton#viewToggle { background: transparent; padding: 7px; border-radius: 11px; }
 QPushButton#viewToggle:hover { background: $button_hover; }
 QPushButton#viewToggle:checked { background: $button; }
+QPushButton#genre { padding: 6px 10px; border-radius: 11px; font-size: 12px; background: $alt_row; }
+QPushButton#genre:hover { background: $button_hover; }
+QPushButton#genre[state="in"] { background: $chunk_b; color: white; }
+QPushButton#genre[state="out"] { background: $disabled_bg; color: $error; text-decoration: line-through; }
 QPushButton#link { background: transparent; color: $accent; padding: 0; border-radius: 0; }
 QPushButton#link:hover { text-decoration: underline; }
 QLabel#about { color: $text; }
@@ -272,6 +276,8 @@ _ICONS = {
     "select_none": '<rect x="4.5" y="4.5" width="15" height="15" rx="4.5" fill="none" stroke="COLOR" stroke-width="2.2"/>',
     "grid": '<rect x="4" y="4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/><rect x="13.4" y="4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/>'
             '<rect x="4" y="13.4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/><rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.8" fill="COLOR"/>',
+    "filter": '<path d="M4.5 6h15l-5.8 6.8v5.4l-3.4 1.8v-7.2z" fill="none" stroke="COLOR" stroke-width="2.2" '
+              'stroke-linejoin="round"/>',
     "list": '<path d="M9 7h10M9 12h10M9 17h6" stroke="COLOR" stroke-width="2.4" stroke-linecap="round"/>'
             '<circle cx="5" cy="7" r="1.4" fill="COLOR"/><circle cx="5" cy="12" r="1.4" fill="COLOR"/>'
             '<circle cx="5" cy="17" r="1.4" fill="COLOR"/>',

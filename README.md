@@ -44,6 +44,9 @@
 - 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres, story and
   every chapter show up, with the size of each file. Show the results as a list or a grid of covers,
   from small to very large; each result shows its rating and genres, and hovering it shows what it's about.
+- 🎀 **Filters**: narrow a search down by genre (ones you want, ones you don't), kind (manga,
+  manhwa, manhua…), ongoing or finished, and rating. Leave the name empty to browse everything
+  that fits.
 - 📚 **Volumes, not a pile of pages**: one CBZ, PDF or EPUB per volume, or per *N* chapters when the
   site has no volume numbers. Webtoon strips are cut into pages for EPUB.
 - ⚡ **Fast but polite**: several files at once, with one shared speed limit so the site isn't flooded.
@@ -137,7 +140,9 @@ closed, that spot shows the delivery cat and how far along it is:
 
 **Download page**
 
-1. Pick a source, type the manga's name and press **Search**. Click the right one in the
+1. Pick a source, type the manga's name and press **Search**. **Filters** opens genres (tap once
+   for ones you want, twice to leave them out), kind, ongoing or finished, and rating; with filters
+   on, the name can stay empty to browse. Click the right one in the
    results (use ‹ › under them for more, and the buttons next to **Pick one** to switch between a
    list and a grid of covers and pick their size); its cover, title, genres, description
    (**Read more** for all of it) and chapter count appear.
