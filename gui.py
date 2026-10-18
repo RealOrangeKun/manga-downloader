@@ -18,7 +18,7 @@ from pathlib import Path
 
 import requests
 from PySide6.QtCore import QBuffer, QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap, QRegion
 from PySide6.QtWidgets import (
     QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
@@ -2812,6 +2812,20 @@ class WheelGuard(QObject):
         return False
 
 
+class RoundPopups(QObject):
+    """Dropdown lists are drawn with rounded corners, but their popup window is square, and where
+    the system can't show see-through windows its corners come out black. Cut the window to the
+    same rounded shape."""
+    RADIUS = 14  # the list's border-radius in theme.py
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() in (QEvent.Show, QEvent.Resize) and obj.inherits("QComboBoxPrivateContainer"):
+            path = QPainterPath()
+            path.addRoundedRect(QRectF(obj.rect()), self.RADIUS, self.RADIUS)
+            obj.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        return False
+
+
 class MainWindow(QWidget):
     UPDATE_CHECK_MS = 6 * 60 * 60 * 1000
 
@@ -2819,6 +2833,8 @@ class MainWindow(QWidget):
         super().__init__(objectName="root")
         self.wheel_guard = WheelGuard(self)
         QApplication.instance().installEventFilter(self.wheel_guard)
+        self.round_popups = RoundPopups(self)
+        QApplication.instance().installEventFilter(self.round_popups)
         self.setWindowTitle("Nyanga")
         self.setWindowIcon(theme.app_icon())
         self.resize(1120, 840)
