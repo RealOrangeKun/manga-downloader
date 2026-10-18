@@ -2820,13 +2820,18 @@ class WheelGuard(QObject):
 
 
 class RoundPopups(QObject):
-    """Dropdown lists are drawn with rounded corners, but their popup window is square, and where
-    the system can't show see-through windows its corners come out black. Cut the window to the
-    same rounded shape."""
+    """Dropdown lists are drawn with rounded corners, but their popup window is square. On Windows
+    its square shadow showed in the corners, and see-through windows need to be frameless there.
+    So: no shadow, frameless and see-through, and cut to the same rounded shape."""
     RADIUS = 14  # the list's border-radius in theme.py
 
     def eventFilter(self, obj, event) -> bool:
-        if event.type() in (QEvent.Show, QEvent.Resize) and obj.inherits("QComboBoxPrivateContainer"):
+        if not obj.isWidgetType() or not obj.inherits("QComboBoxPrivateContainer"):
+            return False
+        if event.type() == QEvent.Polish:  # before its window exists
+            obj.setWindowFlags(obj.windowFlags() | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
+            obj.setAttribute(Qt.WA_TranslucentBackground)
+        elif event.type() in (QEvent.Show, QEvent.Resize):
             path = QPainterPath()
             path.addRoundedRect(QRectF(obj.rect()), self.RADIUS, self.RADIUS)
             obj.setMask(QRegion(path.toFillPolygon().toPolygon()))
