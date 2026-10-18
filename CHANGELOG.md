@@ -2,7 +2,20 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
-## [1.6.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.6.0) (2026-10-17)
+## [1.7.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.7.0) (2026-10-18)
+
+### New
+- download: picking a manga now shows what it's about
+- download: search results now show each title's genres and rating
+- download: you can now filter searches by genre, kind, status and rating
+- download: the cover of the manga you picked is bigger and grows with the window
+- the supported sites in the sidebar now open the site when tapped
+
+### Fixes
+- scrolling over a dropdown or number box no longer changes it
+- download: the hint under the search bar no longer repeats the site name
+
+## [1.6.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.6.0) (2026-10-18)
 
 ### New
 - download: search results can now show as a list or a grid of covers, in five sizes
