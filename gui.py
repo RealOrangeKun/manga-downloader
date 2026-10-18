@@ -12,7 +12,7 @@ import re
 import sys
 import threading
 import time
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import date
 from pathlib import Path
 
@@ -2168,8 +2168,9 @@ class SettingsPage(QWidget):
         self.delay.setValue(s.request_delay)
 
     def _form(self) -> Settings:
-        """The settings as currently entered in the form."""
-        return Settings(
+        """The settings as currently entered in the form; the rest (like the results look) stay as saved."""
+        return replace(
+            self.settings,
             download_dir=self.download_dir.text().strip() or Settings().download_dir,
             temp_dir=self.temp_dir.text().strip(),
             workers=self.workers.value(),
@@ -2181,7 +2182,6 @@ class SettingsPage(QWidget):
             keep_temp=self.keep_temp.isChecked(),
             theme=self.theme.currentData(),
             default_source=self.source.currentData(),
-            seen_version=self.settings.seen_version,
         )
 
     def _toast(self, text: str, error: bool = False) -> None:
