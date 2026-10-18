@@ -2,12 +2,20 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.8.2](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.2) (2026-10-18)
+
+### Fixes
+- the What's new window no longer flashes up little windows before it opens
+- dropdown lists no longer have black corners
+- the scroll bar is wider and easier to grab
+- release dates in What's new now match your own time zone
+
 ## [1.8.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.1) (2026-10-18)
 
 ### Fixes
 - the What's new window opens cleanly instead of flickering and jumping first
 
-## [1.8.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.0) (2026-10-19)
+## [1.8.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.0) (2026-10-18)
 
 ### New
 - installer: the installer no longer asks about importing settings from an old copy
@@ -28,17 +36,17 @@ Written by the release workflow from the commit messages. Each version is a [Git
 - scrolling over a dropdown or number box no longer changes it
 - download: the hint under the search bar no longer repeats the site name
 
-## [1.6.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.6.0) (2026-10-18)
+## [1.6.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.6.0) (2026-10-17)
 
 ### New
 - download: search results can now show as a list or a grid of covers, in five sizes
 
-## [1.5.2](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.2) (2026-10-18)
+## [1.5.2](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.2) (2026-10-17)
 
 ### Fixes
 - what's new now reads as news instead of commands
 
-## [1.5.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.1) (2026-10-18)
+## [1.5.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.5.1) (2026-10-17)
 
 ### Fixes
 - download: moved the back to results button to the left
@@ -93,7 +101,7 @@ Written by the release workflow from the commit messages. Each version is a [Git
 ### Fixes
 - settings: the settings page now scrolls, so the window fits smaller screens
 
-## [1.1.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.1.0) (2026-10-17)
+## [1.1.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.1.0) (2026-10-16)
 
 ### New
 - clicking the version now shows what's new
