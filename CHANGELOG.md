@@ -2,6 +2,11 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.8.3](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.3) (2026-10-18)
+
+### Fixes
+- dropdown lists on Windows no longer have dark corners
+
 ## [1.8.2](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.2) (2026-10-18)
 
 ### Fixes
