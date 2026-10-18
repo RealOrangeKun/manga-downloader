@@ -238,8 +238,9 @@ After the first time, only the last line is needed.
   formats), `gui.py` (the window), `loader.py` (the cats), `updater.py` (checks GitHub for new
   versions and installs them), `paths.py` (where assets and user data live, from source and in
   the exe).
-- To add a site, write a class like `FanFox` in `core.py` with `url_re`, `search()`, `info()`,
-  `page_urls()` and `image()`, and add it to `SITES`. It then shows up as a source to search.
+- To add a site, write a class like `FanFox` in `core.py` with `name`, `home`, `url_re`, `search()`, `info()`,
+  `page_urls()` and `image()`, and add it to `SITES`. For filters, give it `genres` and `kinds`
+  lists and let `search()` take a `SearchFilters`; `about()` adds ratings and genres to its search results. It then shows up as a source to search.
 - Commit messages are [conventional commits](https://www.conventionalcommits.org) (`fix:`,
   `feat:`, `docs:`...). They decide the next version and become the release notes; the subject and body also show
   up in the app's What's new window, so write them for someone who's never seen the code.

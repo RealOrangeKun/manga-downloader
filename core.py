@@ -124,6 +124,7 @@ class SharedRateLimiter:
 
 class FanFox:
     name = "fanfox.net"
+    home = "https://fanfox.net/"  # the sidebar's Supported sites box links here
     example = "https://fanfox.net/manga/<title>/"
     url_re = re.compile(r"(?:fanfox\.net|mangafox\.\w+)/manga/([a-z0-9_]+)", re.I)
     _title_re = re.compile(r'class="detail-info-right-title-font">([^<]+)<')

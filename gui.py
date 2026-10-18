@@ -2873,7 +2873,11 @@ class MainWindow(QWidget):
         sbox.setSpacing(6)
         sbox.addWidget(label("SUPPORTED SITES", "sitesTitle"))
         for site in core.SITES:
-            sbox.addWidget(label(f"♥  {site.name}", "sitePill"))
+            pill = QPushButton(f"♥  {site.name}", objectName="sitePill")
+            pill.setCursor(Qt.PointingHandCursor)
+            pill.setToolTip(f"Open {site.name} in your browser")
+            pill.clicked.connect(lambda _=False, url=site.home: QDesktopServices.openUrl(QUrl(url)))
+            sbox.addWidget(pill)
         sl.addWidget(sites)
         sl.addSpacing(6)
         self.toggle = QPushButton(objectName="themeToggle")

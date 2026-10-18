@@ -55,10 +55,11 @@ QLabel#logo { font-size: 20px; font-weight: 700; color: $accent; }
 QLabel#tagline { color: $muted; font-size: 12px; }
 QFrame#sitesBox { background: $sites_bg; border-radius: 16px; }
 QLabel#sitesTitle { color: $muted; font-size: 10px; font-weight: 600; }
-QLabel#sitePill {
+QPushButton#sitePill {
     background: $card; color: $accent_soft; border-radius: 10px; padding: 5px 10px;
-    font-size: 12px; font-weight: 600;
+    font-size: 12px; font-weight: 600; text-align: left;
 }
+QPushButton#sitePill:hover { color: $accent; text-decoration: underline; }
 QLabel#greeting { color: $accent; font-size: 17px; font-weight: 700; padding-left: 4px; }
 QPushButton#version {
     background: transparent; color: $muted; padding: 0 0 0 4px; text-align: left;
