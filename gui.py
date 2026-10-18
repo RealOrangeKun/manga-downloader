@@ -20,7 +20,7 @@ import requests
 from PySide6.QtCore import QBuffer, QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
+    QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
     QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -2791,11 +2791,27 @@ class UpdateBridge(QObject):
     failed = Signal(str)
 
 
+class WheelGuard(QObject):
+    """Scrolling over a dropdown or number box scrolls the page instead of changing the value."""
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Wheel and isinstance(obj, (QAbstractSpinBox, QComboBox)):
+            parent = obj.parentWidget()
+            while parent and not isinstance(parent, QAbstractScrollArea):
+                parent = parent.parentWidget()
+            if parent:
+                QApplication.sendEvent(parent.viewport(), event)
+            return True
+        return False
+
+
 class MainWindow(QWidget):
     UPDATE_CHECK_MS = 6 * 60 * 60 * 1000
 
     def __init__(self):
         super().__init__(objectName="root")
+        self.wheel_guard = WheelGuard(self)
+        QApplication.instance().installEventFilter(self.wheel_guard)
         self.setWindowTitle("Nyanga")
         self.setWindowIcon(theme.app_icon())
         self.resize(1120, 840)
