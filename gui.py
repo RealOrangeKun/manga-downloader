@@ -662,6 +662,7 @@ def group_keys(group: core.Group) -> list[str]:
 
 class DownloadPage(QWidget):
     completed = Signal(str, int, str)  # title, number of files, folder
+    COVER_WIDTHS = (150, 280)  # the open title's cover grows with the window between these
 
     def __init__(self, settings: Settings, history: History):
         super().__init__(objectName="page")
@@ -834,7 +835,7 @@ class DownloadPage(QWidget):
         top = QHBoxLayout()
         top.setSpacing(22)
         self.cover = QLabel()
-        self.cover.setFixedSize(132, 188)
+        self.cover.setFixedSize(self._cover_size())
         top.addWidget(self.cover, 0, Qt.AlignTop)
         right = QVBoxLayout()
         right.setSpacing(8)
@@ -878,6 +879,7 @@ class DownloadPage(QWidget):
         top.addLayout(right, 1)
         ml.addLayout(top)
         self.manga_card.hide()
+        self.manga_card.installEventFilter(self)  # the cover grows with the card
         col.addWidget(self.manga_card)
 
         # files table
@@ -1451,9 +1453,16 @@ class DownloadPage(QWidget):
         self.about_more.setText("Show less" if self.about_open else "Read more ✧")
         self.about_more.setVisible(long)
 
+    def _cover_size(self) -> QSize:
+        """About a fifth of the details card's width, in the 54:76 shape of manga covers."""
+        low, high = self.COVER_WIDTHS
+        w = min(max(round(self.manga_card.width() * 0.2), low), high) if hasattr(self, "manga_card") else low
+        return QSize(w, round(w * 76 / 54))
+
     def refresh_cover(self) -> None:
         if self.info:
-            self.cover.setPixmap(rounded_pixmap(self.info.cover, 132, 188))
+            size = self.cover.size()
+            self.cover.setPixmap(rounded_pixmap(self.info.cover, size.width(), size.height(), radius=18))
         for item in self.results:
             item.set_cover(item.data)  # the placeholder follows the theme
 
@@ -1649,7 +1658,12 @@ class DownloadPage(QWidget):
 
     def eventFilter(self, obj, event) -> bool:
         """Paws: click to toggle, shift-click to set everything since the last click, drag to paint.
-        Also re-flows the search results when their card changes width."""
+        Also re-flows the search results and resizes the cover when their cards change width."""
+        if obj is getattr(self, "manga_card", None):  # the results card is resized before this exists
+            if event.type() == QEvent.Resize and self.cover.size() != self._cover_size():
+                self.cover.setFixedSize(self._cover_size())
+                self.refresh_cover()
+            return super().eventFilter(obj, event)
         if obj is self.results_card:
             if event.type() == QEvent.Resize:
                 self._place_results()
