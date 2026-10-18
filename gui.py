@@ -2627,8 +2627,8 @@ class WhatsNew(QDialog):
         outer.setContentsMargins(28, 22, 28, 22)
         outer.setSpacing(6)
         self.cat = CatLoader(lambda: CURRENT["mode"], (100, 80), celebrate=True)
-        self.cat.start()
         outer.addWidget(self.cat, 0, Qt.AlignHCenter)
+        self.cat.start()  # only once it's in the dialog, or it pops up as a window of its own
         outer.addWidget(label("What's new ✧", "h1"), 0, Qt.AlignHCenter)
         sub = label(subtitle, "hint", wrap=True)
         sub.setAlignment(Qt.AlignCenter)
@@ -2686,8 +2686,8 @@ class WhatsNew(QDialog):
             top.addWidget(label(item["area"], "chip"), 0, Qt.AlignTop)
         box.addLayout(top)
         detail = label(item["detail"], "noteDetail", wrap=True)
-        detail.setVisible(bool(item["detail"]))
         box.addWidget(detail)
+        detail.setVisible(bool(item["detail"]))  # after it's in the card, or it flashes up as its own window
         for w in (title, detail):
             w.setTextFormat(Qt.PlainText)  # commit text, not markup
         return frame
