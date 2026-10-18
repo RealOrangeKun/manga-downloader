@@ -97,6 +97,8 @@ QPushButton#viewToggle:checked { background: $button; }
 QPushButton#link { background: transparent; color: $accent; padding: 0; border-radius: 0; }
 QPushButton#link:hover { text-decoration: underline; }
 QLabel#about { color: $text; }
+QLabel#stars { color: $accent; font-weight: 600; font-size: 12px; }
+QLabel#stars[unrated="true"] { color: $muted; font-weight: 400; }
 QPushButton#pager { min-width: 34px; max-width: 34px; padding: 4px 0; font-size: 20px; font-weight: 700; }
 QPushButton#primary {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary_a, stop:1 $primary_b);

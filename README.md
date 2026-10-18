@@ -41,9 +41,9 @@
 
 ## ♡ What it does
 
-- 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres and every
-  chapter show up, with the size of each file. Show the results as a list or a grid of covers,
-  from small to very large.
+- 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres, story and
+  every chapter show up, with the size of each file. Show the results as a list or a grid of covers,
+  from small to very large; each result shows its rating and genres, and hovering it shows what it's about.
 - 📚 **Volumes, not a pile of pages**: one CBZ, PDF or EPUB per volume, or per *N* chapters when the
   site has no volume numbers. Webtoon strips are cut into pages for EPUB.
 - ⚡ **Fast but polite**: several files at once, with one shared speed limit so the site isn't flooded.

@@ -54,6 +54,7 @@ class MangaInfo:
     status: str = ""
     genres: list[str] = field(default_factory=list)
     description: str = ""
+    rating: float = 0.0  # out of 5; 0 when nobody has rated it yet
 
 
 @dataclass
@@ -65,6 +66,9 @@ class SearchResult:
     status: str = ""
     latest: str = ""
     author: str = ""
+    genres: list[str] | None = None  # None until fetched from the title's page
+    description: str = ""
+    rating: float = 0.0
 
 
 class RateLimiter:
@@ -110,6 +114,7 @@ class FanFox:
     _status_re = re.compile(r'class="detail-info-right-title-tip">([^<]+)<')
     _genres_re = re.compile(r'<p class="detail-info-right-tag-list">(.*?)</p>', re.S)
     _desc_res = [re.compile(rf'<p [^>]*class="{c}">(.*?)</p>', re.S) for c in ("fullcontent", "detail-info-right-content")]
+    _score_re = re.compile(r'<span class="item-score">\s*([\d.]+)\s*<')
     _cover_re = re.compile(r'<img class="detail-info-cover-img" src="([^"]+)"')
     _image_re = re.compile(r'data-original="([^"]+)"')
     _result_re = re.compile(r'<li>\s*<a href="/manga/([a-z0-9_]+)/"[^>]*><img class="manga-list-4-cover" '
@@ -185,12 +190,14 @@ class FanFox:
         status = self._status_re.search(page)
         genres = self._genres_re.search(page)
         desc = next(filter(None, (r.search(page) for r in self._desc_res)), None)  # the full one if it's there
+        score = self._score_re.search(page)
         info = MangaInfo(
             title=html.unescape(title.group(1)).strip() if title else self.slug.replace("_", " ").title(),
             chapters=sorted(found.values(), key=lambda c: (c.number, c.url)),
             status=status.group(1).strip() if status else "",
             genres=[html.unescape(g) for g in re.findall(r'title="([^"]+)"', genres.group(1))] if genres else [],
             description=_plain(desc.group(1)) if desc else "",
+            rating=float(score.group(1)) if score else 0.0,
         )
         cover = self._cover_re.search(page) if with_cover else None
         if cover:
@@ -225,6 +232,11 @@ class FanFox:
             wanted = query.strip().lower()
             results.sort(key=lambda r: (r.title.lower() != wanted, not r.title.lower().startswith(wanted)))
         return results, pages if results else page_no
+
+    def about(self, url: str) -> tuple[list[str], str, float]:
+        """A title's genres, description and rating, for showing alongside search results."""
+        info = type(self)(url, self.limiter).info(with_cover=False)
+        return info.genres, info.description, info.rating
 
     def cover(self, url: str) -> bytes | None:
         try:

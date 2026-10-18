@@ -22,7 +22,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApp
 from PySide6.QtWidgets import (
     QAbstractItemView, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
-    QMessageBox, QProgressBar, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
+    QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -122,6 +122,8 @@ class Bridge(QObject):
     searched = Signal(int, object, str, int, list, int)  # search id, site class, query, page, SearchResults, pages
     search_failed = Signal(int, str)
     cover_ready = Signal(int, int, object)  # results-page token, result index, image bytes (or None)
+    about_ready = Signal(int, int, list, str, float)  # results-page token, result index, genres, description, rating
+    about_missed = Signal(int, int)  # results-page token, result index whose page couldn't be read
     fetched = Signal(object, object)  # site, MangaInfo
     fetch_failed = Signal(str)
     status = Signal(int, str, float, str)  # table row, state, fraction, message
@@ -328,6 +330,18 @@ class ResultItem(QFrame):
         self.cover.setFixedSize(self.cover_w, self.cover_h)
         self.set_cover(None)
         meta = "  ·  ".join(x for x in (result.status, result.latest) if x)
+        self.tags = TagRow()  # filled in once the title's page has been read
+        self.stars = label("", "stars")
+        self.stars.hide()
+        self.loading = QWidget()  # a little cat while the title's page is being read
+        lrow = QHBoxLayout(self.loading)
+        lrow.setContentsMargins(0, 0, 0, 0)
+        lrow.setSpacing(4)
+        self.loading_cat = MiniCat(lambda: CURRENT["mode"], (30, 18))
+        lrow.addWidget(self.loading_cat)
+        lrow.addWidget(label("reading its page ✧", "meta"))
+        lrow.addStretch(1)
+        self.loading.hide()
         if grid:  # a tile: cover on top, title underneath
             col = QVBoxLayout(self)
             col.setContentsMargins(10, 10, 10, 12)
@@ -336,11 +350,16 @@ class ResultItem(QFrame):
             title = label(result.title, "resultTitle", wrap=True)
             title.setAlignment(Qt.AlignHCenter)
             col.addWidget(title)
+            self.stars.setAlignment(Qt.AlignHCenter)
+            col.addWidget(self.stars)
+            lrow.insertStretch(0, 1)  # centered under the title
+            col.addWidget(self.loading)
             if meta:
                 info = label(meta, "meta", wrap=True)
                 info.setAlignment(Qt.AlignHCenter)
                 col.addWidget(info)
             col.addStretch(1)
+            self.set_about(result.genres, result.description, result.rating)
             return
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 10, 14, 10)
@@ -349,12 +368,43 @@ class ResultItem(QFrame):
         text = QVBoxLayout()
         text.setSpacing(3)
         text.addWidget(label(result.title, "resultTitle", wrap=True))
+        text.addWidget(self.stars)
+        text.addWidget(self.loading)
         if meta:
             text.addWidget(label(meta, "meta", wrap=True))
         if result.author:
             text.addWidget(label(f"by {result.author}", "hint", wrap=True))
+        text.addWidget(self.tags)
         text.addStretch(1)
         row.addLayout(text, 1)
+        self.set_about(result.genres, result.description, result.rating)
+
+    def set_about(self, genres: list[str] | None, description: str, rating: float = 0.0) -> None:
+        """Show the title's rating, its genres (as tags in the list) and its description when hovered."""
+        if genres is None:
+            return
+        self.stop_loading()
+        self.stars.setText(stars_text(rating))
+        self.stars.setProperty("unrated", rating <= 0)
+        repolish(self.stars)
+        self.stars.show()
+        tip = f"<b>{html.escape(self.result.title)}</b><br>{stars_text(rating)}"
+        if genres:
+            tip += f"<br><span>{html.escape('  ·  '.join(genres))}</span>"
+        if description:
+            short = description if len(description) <= 420 else description[:420].rsplit(" ", 1)[0] + "…"
+            tip += "<br><br>" + html.escape(short).replace("\n", "<br>")
+        self.setToolTip(f"<qt>{tip}</qt>")
+        if not self.grid:
+            self.tags.set_tags(genres)
+
+    def start_loading(self) -> None:
+        self.loading.show()
+        self.loading_cat.start()
+
+    def stop_loading(self) -> None:
+        self.loading_cat.stop()
+        self.loading.hide()
 
     def min_width(self) -> int:
         """How narrow this card can get and still look right, for working out the columns."""
@@ -367,6 +417,69 @@ class ResultItem(QFrame):
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
+
+
+def stars_text(rating: float) -> str:
+    """A rating out of 5 as stars, like ★★★★☆ 4.5 (0 means nobody has rated it)."""
+    if rating <= 0:
+        return "☆ No ratings yet"
+    full = round(rating)
+    return f"{'★' * full}{'☆' * (5 - full)}  {rating:.1f}"
+
+
+class TagRow(QWidget):
+    """A line of genre chips that shows as many as fit and a "+N" chip for the rest."""
+
+    SPACING = 5
+
+    def __init__(self):
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.chips: list[QLabel] = []
+        self.more = label("", "chip")
+        self.more.setParent(self)
+        self.more.hide()
+
+    def set_tags(self, tags: list[str]) -> None:
+        for chip in self.chips:
+            chip.deleteLater()
+        self.chips = []
+        for tag in tags:
+            chip = label(tag, "chip")
+            chip.setParent(self)
+            self.chips.append(chip)
+        self.updateGeometry()
+        self._lay_out()
+
+    def sizeHint(self) -> QSize:
+        return QSize(0, self.more.sizeHint().height() + 2 if self.chips else 0)
+
+    def resizeEvent(self, event) -> None:
+        self._lay_out()
+
+    def _lay_out(self) -> None:
+        widths = [c.sizeHint().width() for c in self.chips]
+        shown = len(widths)
+        while shown:
+            hidden = len(widths) - shown
+            self.more.setText(f"+{hidden}")
+            used = sum(widths[:shown]) + self.SPACING * (shown - 1)
+            if hidden:
+                used += self.SPACING + self.more.sizeHint().width()
+            if used <= self.width():
+                break
+            shown -= 1
+        x = 0
+        for i, chip in enumerate(self.chips):
+            chip.setVisible(i < shown)
+            if i < shown:
+                chip.setGeometry(x, 2, widths[i], chip.sizeHint().height())
+                x += widths[i] + self.SPACING
+        hidden = len(self.chips) - shown
+        self.more.setVisible(bool(hidden))
+        if hidden:
+            self.more.setText(f"+{hidden}")
+            self.more.setGeometry(x, 2, self.more.sizeHint().width(), self.more.sizeHint().height())
 
 
 class SortHeader(QHeaderView):
@@ -473,6 +586,8 @@ class DownloadPage(QWidget):
         self.bridge.searched.connect(self._on_searched)
         self.bridge.search_failed.connect(self._on_search_failed)
         self.bridge.cover_ready.connect(self._on_cover)
+        self.bridge.about_ready.connect(self._on_about)
+        self.bridge.about_missed.connect(self._on_about_missed)
         self.search_id = 0  # results of older searches are ignored
         self.results: list[ResultItem] = []  # shown right now
         self.search_site = None
@@ -483,6 +598,7 @@ class DownloadPage(QWidget):
         self.search_loading = 0  # results page being fetched, or 0
         self.cover_token = 0  # covers for an older page are ignored
         self.cover_cache: dict[str, bytes | None] = {}
+        self.about_cache: dict[str, tuple[list[str], str, float]] = {}  # title url -> genres, description, rating
         self.bridge.fetched.connect(self._on_fetched)
         self.bridge.fetch_failed.connect(self._on_fetch_failed)
         self.bridge.status.connect(self._on_status)
@@ -942,6 +1058,10 @@ class DownloadPage(QWidget):
             item.clicked.connect(lambda r=result: self._pick(r))
             if result.cover_url in self.cover_cache:
                 item.set_cover(self.cover_cache[result.cover_url])
+            if result.url in self.about_cache:
+                item.set_about(*self.about_cache[result.url])
+            elif hasattr(self.search_site, "about"):
+                item.start_loading()
             self.results.append(item)
         self.results_cols = 0
         self._place_results()
@@ -989,6 +1109,7 @@ class DownloadPage(QWidget):
         self.cover_token += 1
         token, site_cls = self.cover_token, self.search_site
         missing = [(i, r.cover_url) for i, r in enumerate(results) if r.cover_url and r.cover_url not in self.cover_cache]
+        unknown = [(i, r.url) for i, r in enumerate(results) if r.url not in self.about_cache]
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def covers() -> None:
@@ -997,14 +1118,34 @@ class DownloadPage(QWidget):
                 if token != self.cover_token:
                     return  # another page is showing now
                 self.bridge.cover_ready.emit(token, i, site.cover(url))
+            if not hasattr(site, "about"):
+                return
+            for i, url in unknown:  # then the genres and descriptions, which need each title's page
+                if token != self.cover_token:
+                    return
+                try:
+                    genres, description, rating = site.about(url)
+                except core.SiteError:
+                    self.bridge.about_missed.emit(token, i)  # the card just stays without tags
+                    continue
+                self.bridge.about_ready.emit(token, i, genres, description, rating)
 
-        if missing:
+        if missing or unknown:
             threading.Thread(target=covers, daemon=True).start()
 
     def _on_cover(self, token: int, index: int, data) -> None:
         if token == self.cover_token and index < len(self.results):
             self.cover_cache[self.results[index].result.cover_url] = data
             self.results[index].set_cover(data)
+
+    def _on_about(self, token: int, index: int, genres: list, description: str, rating: float) -> None:
+        if token == self.cover_token and index < len(self.results):
+            self.about_cache[self.results[index].result.url] = (genres, description, rating)
+            self.results[index].set_about(genres, description, rating)
+
+    def _on_about_missed(self, token: int, index: int) -> None:
+        if token == self.cover_token and index < len(self.results):
+            self.results[index].stop_loading()
 
     def _pick(self, result: core.SearchResult) -> None:
         if not self.running:
@@ -1205,6 +1346,7 @@ class DownloadPage(QWidget):
         self.groups = core.make_groups(self.info.chapters, self.per_file.value())
         vols = sum(1 for c in self.info.chapters if c.volume != core.NO_VOLUME)
         status = f"{self.info.status}  ·  " if self.info.status else ""
+        status += f"{stars_text(self.info.rating)}  ·  "
         self.meta_lbl.setText(f"{status}{len(self.info.chapters)} chapters  ·  "
                               f"{'volume numbers available' if vols else 'no volume numbers'}")
         self.table.blockSignals(True)
