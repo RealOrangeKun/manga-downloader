@@ -190,8 +190,8 @@ QProgressBar[state="Done"] { color: $ok; }
 QProgressBar[state="Already exists"], QProgressBar[state="Cancelled"] { color: $muted; }
 QProgressBar[state="Failed"] { color: $error; }
 QProgressBar[state="Failed"]::chunk { background: $failed_chunk; }
-QScrollBar:vertical { background: transparent; width: 10px; margin: 4px; }
-QScrollBar::handle:vertical { background: $scroll; border-radius: 4px; min-height: 30px; }
+QScrollBar:vertical { background: transparent; width: 12px; margin: 3px; }
+QScrollBar::handle:vertical { background: $scroll; border-radius: 3px; min-height: 30px; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 """)
