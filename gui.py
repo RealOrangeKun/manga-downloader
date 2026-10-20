@@ -18,6 +18,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 import requests
+import segno
 from PySide6.QtCore import QBuffer, QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap, QRegion
 from PySide6.QtWidgets import (
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 import appmenu
 import core
 import paths
+import phone
 import theme
 import updater
 from history import History, ago, chapter_key
@@ -96,6 +98,7 @@ class Settings:
     results_grid: bool = False  # search results as a grid of covers instead of a list
     results_size: int = 1  # index into ResultItem.SIZES
     seen_version: str = ""  # the version last opened, to show What's new once after an update
+    sent_to_phone: bool = False  # anything sent to a phone yet (until then it mentions the Windows firewall prompt)
 
     @staticmethod
     def path() -> Path:
@@ -714,6 +717,7 @@ class DownloadPage(QWidget):
         self.running = False
         self.fractions: dict[int, float] = {}
         self.book_dir: Path | None = None
+        self.run_files: set[Path] = set()  # the files the last download made
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1028,13 +1032,17 @@ class DownloadPage(QWidget):
         self.open_btn = set_icon(QPushButton(" Open folder"), "folder")
         self.open_btn.clicked.connect(self._open_folder)
         self.open_btn.hide()
+        self.phone_btn = set_icon(QPushButton(" Send to phone"), "phone")
+        self.phone_btn.setToolTip("Send the files to your phone over Wi‑Fi ✦")
+        self.phone_btn.clicked.connect(self._send_to_phone)
+        self.phone_btn.hide()
         self.cancel_btn = set_icon(QPushButton(" Cancel"), "close")
         self.cancel_btn.clicked.connect(self._cancel)
         self.cancel_btn.hide()
         self.start_btn = set_icon(QPushButton(" Download", objectName="primary"), "download", "white", 20)
         self.start_btn.clicked.connect(self._start)
         self.start_btn.setEnabled(False)
-        for w in (self.open_btn, self.cancel_btn, self.start_btn):
+        for w in (self.open_btn, self.phone_btn, self.cancel_btn, self.start_btn):
             bl.addWidget(w)
         wrap = QWidget()
         wl = QVBoxLayout(wrap)
@@ -1402,6 +1410,7 @@ class DownloadPage(QWidget):
         self.files_card.show()
         self.back_btn.setVisible(bool(self.results))
         self.open_btn.hide()
+        self.phone_btn.hide()
         self.bytes_per_chapter = None
         self.estimating = True
         self._regroup()
@@ -1915,6 +1924,7 @@ class DownloadPage(QWidget):
         self.cancel_btn.setText(" Cancel")
         self.cancel_btn.show()
         self.open_btn.hide()
+        self.phone_btn.hide()
         self.bar_cat.start()
         self.overall.setValue(0)
         for i in rows:  # other rows keep showing what is already downloaded
@@ -1931,6 +1941,7 @@ class DownloadPage(QWidget):
 
         groups = [self.groups[r] for r in rows]
         rebuild = self._incomplete(groups, fmt)
+        self.run_files = {core.target_path(title, g, fmt, self.book_dir) for g in groups}
 
         def on_status(index: int, state: str, frac: float, msg: str) -> None:
             self.bridge.status.emit(rows[index], state, frac, msg)
@@ -2009,6 +2020,7 @@ class DownloadPage(QWidget):
         self._set_locked(False)
         self.cancel_btn.hide()
         self.open_btn.show()
+        self.phone_btn.setVisible(bool(self.history.files(self.key)))
         self._update_summary()
         took = fmt_duration(time.monotonic() - self.run_t0, about=False)
         if cancelled:
@@ -2025,6 +2037,13 @@ class DownloadPage(QWidget):
         self.cancel.set()
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.setText("Cancelling…")
+
+    def _send_to_phone(self) -> None:
+        """Every downloaded file of this manga, with the ones from the last run ticked."""
+        files = self.history.files(self.key)
+        if files:
+            ticked = {f for f in files if f in self.run_files} or None
+            SendToPhone(self, self.settings, self.info.title, files, self.history.cover_path(self.key), ticked).exec()
 
     def _open_folder(self) -> None:
         if self.book_dir and self.book_dir.exists():
@@ -2409,6 +2428,12 @@ class LibraryPage(QWidget):
         folder_btn.setToolTip(f"Show the files in {folder}" if folder else "Nothing downloaded yet ✦")
         folder_btn.clicked.connect(lambda: self._open_folder(key))
         buttons.addWidget(folder_btn)
+        phone_btn = set_icon(QPushButton(" Phone"), "phone")
+        phone_btn.setEnabled(bool(self.history.files(key)))
+        phone_btn.setToolTip("Send the files to your phone over Wi‑Fi ✦" if phone_btn.isEnabled()
+                             else "Nothing downloaded yet ✦")
+        phone_btn.clicked.connect(lambda: self._send_to_phone(key))
+        buttons.addWidget(phone_btn)
         open_btn = set_icon(QPushButton(" Open"), "library")
         open_btn.setToolTip("Open it on the Download page to pick more chapters")
         open_btn.clicked.connect(lambda: self.open_requested.emit(url, "open"))
@@ -2435,6 +2460,14 @@ class LibraryPage(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
         else:
             self.refresh()  # it was moved or deleted; the button turns grey
+
+    def _send_to_phone(self, key: str) -> None:
+        files = self.history.files(key)
+        if files:
+            title = (self.history.get(key) or {}).get("title", "")
+            SendToPhone(self, self.settings, title, files, self.history.cover_path(key)).exec()
+        else:
+            self.refresh()  # moved or deleted since
 
     def _fill(self, key: str) -> None:
         entry, w = self.history.get(key), self.cards.get(key)
@@ -2747,6 +2780,284 @@ class WhatsNew(QDialog):
         for w in (title, detail):
             w.setTextFormat(Qt.PlainText)  # commit text, not markup
         return frame
+
+
+class PhoneBridge(QObject):
+    event = Signal(str, int, int, int, str)  # kind, file index, bytes sent, file size, device (see phone.Share)
+
+
+def qr_pixmap(text: str, size: int) -> QPixmap:
+    """A QR code in the app's dark pink on white, `size` pixels square."""
+    matrix = segno.make(text, error="m").matrix
+    ratio = QGuiApplication.primaryScreen().devicePixelRatio() if QGuiApplication.primaryScreen() else 1.0
+    pix = QPixmap(int(size * ratio), int(size * ratio))
+    pix.setDevicePixelRatio(ratio)
+    pix.fill(QColor("#ffffff"))
+    cell = int(size * ratio) // len(matrix)  # whole device pixels per square, or seams show between them
+    start = (int(size * ratio) - cell * len(matrix)) // 2
+    p = QPainter(pix)
+    p.scale(1 / ratio, 1 / ratio)
+    ink = QColor(theme.PALETTES[theme.LIGHT]["text"])
+    for y, line in enumerate(matrix):
+        for x, on in enumerate(line):
+            if on:
+                p.fillRect(start + x * cell, start + y * cell, cell, cell, ink)
+    p.end()
+    return pix
+
+
+class ElidedCheck(QCheckBox):
+    """A checkbox whose long text is shortened in the middle to fit (the end, like "Vol. 03.cbz",
+    stays visible); hovering shows all of it."""
+
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.full = text
+        self.setToolTip(text)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(60, super().minimumSizeHint().height())
+
+    def resizeEvent(self, event) -> None:
+        room = self.width() - 22 - 12  # the paw and the gap after it
+        self.setText(self.fontMetrics().elidedText(self.full, Qt.ElideMiddle, max(room, 10)))
+        super().resizeEvent(event)
+
+
+class SendToPhone(QDialog):
+    """Shares a manga's files on the home Wi-Fi and shows a QR code for the phone to open them."""
+
+    IDLE_STOP = 15 * 60  # seconds without any visit or download before sharing stops by itself
+    NO_VISIT_TIP = 60
+
+    def __init__(self, parent: QWidget, settings: Settings, title: str, files: list[Path], cover: Path | None,
+                 ticked: set[Path] | None = None):
+        super().__init__(parent, objectName="sendPhone")
+        self.settings = settings
+        self.setWindowTitle("Send to your phone")
+        self.setFixedWidth(720)
+        self.bridge = PhoneBridge()
+        self.bridge.event.connect(self._on_event)
+        self.share = phone.Share(title, files, cover, self.bridge.event.emit, theme.app_svg())
+        self.share.allowed = {i for i, f in enumerate(files) if ticked is None or f in ticked}
+        self.sent: dict[int, list[str]] = {}  # file -> the devices that have it
+        self.going: dict[int, dict[str, float]] = {}  # file -> device -> how far its download is
+        self.devices: list[str] = []  # in the order they turned up
+        self.visited = False
+        self.opened = time.monotonic()
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(28, 22, 28, 22)
+        outer.setSpacing(6)
+        outer.addWidget(label("Send to your phone ✦", "h1"), 0, Qt.AlignHCenter)
+        self.sub = label("Pick the files, then scan the code with your phone's camera", "hint", wrap=True)
+        self.sub.setAlignment(Qt.AlignCenter)
+        outer.addWidget(self.sub)
+        outer.addSpacing(12)
+
+        body = QHBoxLayout()
+        body.setSpacing(22)
+        left = QVBoxLayout()
+        left.setSpacing(6)
+        rows = QWidget()
+        col = QVBoxLayout(rows)
+        col.setContentsMargins(0, 0, 8, 0)
+        col.setSpacing(6)
+        self.rows: list[dict] = []
+        for i, f in enumerate(files):
+            col.addWidget(self._row(i, f))
+        col.addStretch(1)
+        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(rows)
+        scroll.setMinimumHeight(min(330, 58 * len(files) + 10))
+        left.addWidget(scroll, 1)
+        picks = QHBoxLayout()
+        picks.setSpacing(10)
+        for text, on in (("Select all", True), ("None", False)):
+            b = QPushButton(text, objectName="link")
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda _=False, on=on: self._tick_all(on))
+            picks.addWidget(b)
+        picks.addStretch(1)
+        left.addLayout(picks)
+        body.addLayout(left, 1)
+
+        right = QVBoxLayout()
+        right.setSpacing(6)
+        mode = lambda: CURRENT["mode"]
+        self.cat = CatLoader(mode, (90, 72))
+        self.happy = CatLoader(mode, (90, 72), celebrate=True)
+        for cat in (self.cat, self.happy):
+            right.addWidget(cat, 0, Qt.AlignHCenter)
+        qr_card = QFrame(objectName="qrCard")
+        qr_box = QVBoxLayout(qr_card)
+        qr_box.setContentsMargins(14, 14, 14, 14)
+        self.qr = QLabel()
+        self.qr.setFixedSize(200, 200)
+        qr_box.addWidget(self.qr)
+        self.qr_card = qr_card
+        right.addWidget(qr_card, 0, Qt.AlignHCenter)
+        self.scan = label("Scan me with your phone's camera ♥", "h2", wrap=True)
+        self.scan.setAlignment(Qt.AlignCenter)
+        right.addWidget(self.scan)
+        self.address = label("", "address")
+        self.address.setAlignment(Qt.AlignCenter)
+        self.address.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.address.setToolTip("Or type this into your phone's browser")
+        right.addWidget(self.address)
+        self.connected = label("", "phoneSent", wrap=True)
+        self.connected.setAlignment(Qt.AlignCenter)
+        self.connected.hide()
+        right.addWidget(self.connected)
+        right.addStretch(1)
+        right_w = QWidget()
+        right_w.setFixedWidth(280)
+        right_w.setLayout(right)
+        body.addWidget(right_w)
+        outer.addLayout(body, 1)
+
+        outer.addSpacing(10)
+        self.hint = label("", "hint", wrap=True)
+        self.hint.setAlignment(Qt.AlignCenter)
+        outer.addWidget(self.hint)
+        outer.addSpacing(6)
+        self.stop_btn = set_icon(QPushButton(" Stop sharing"), "close")
+        self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.clicked.connect(self.accept)
+        outer.addWidget(self.stop_btn, 0, Qt.AlignHCenter)
+        self.finished.connect(lambda _: self.share.stop())
+
+        url = self.share.start()
+        if url:
+            self.qr.setPixmap(qr_pixmap(url, 200))
+            self.address.setText(url.split("://", 1)[1].rstrip("/"))
+            self._hint()
+            self.cat.start()
+            self.timer = QTimer(self, interval=5000)
+            self.timer.timeout.connect(self._tick)
+            self.timer.start()
+        else:
+            self.qr_card.hide()
+            self.address.hide()
+            self.scan.setText("Your computer isn't on Wi‑Fi right now ✿")
+            self.hint.setText("Connect it to the same Wi‑Fi as your phone, then open this again")
+            self.stop_btn.setText(" Close")
+            self.cat.start()
+
+    def _row(self, i: int, path: Path) -> QFrame:
+        frame = QFrame(objectName="phoneFile")
+        box = QHBoxLayout(frame)
+        box.setContentsMargins(12, 8, 14, 8)
+        box.setSpacing(10)
+        check = ElidedCheck(phone.download_name(path))
+        check.setChecked(i in self.share.allowed)
+        check.toggled.connect(lambda on, i=i: self._toggle(i, on))
+        box.addWidget(check, 1)
+        try:
+            size = fmt_size(phone.size_of(path))
+        except OSError:
+            size = ""
+        size_lbl = label(size, "meta")
+        box.addWidget(size_lbl)
+        bar = QProgressBar(maximum=1000, textVisible=False)
+        bar.setFixedSize(90, 10)
+        bar.hide()
+        box.addWidget(bar)
+        sent = label("Sent ✦", "phoneSent")
+        sent.hide()
+        box.addWidget(sent)
+        self.rows.append({"check": check, "size": size_lbl, "bar": bar, "sent": sent})
+        return frame
+
+    def _toggle(self, i: int, on: bool) -> None:
+        (self.share.allowed.add if on else self.share.allowed.discard)(i)
+        self._celebrate()
+
+    def _tick_all(self, on: bool) -> None:
+        for row in self.rows:
+            row["check"].setChecked(on)
+
+    def _hint(self) -> None:
+        if not self.visited and time.monotonic() - self.opened > self.NO_VISIT_TIP:
+            text = ("Phone can't open it? Check it's on the same Wi‑Fi and any VPN on it is off. "
+                    "Some guest or school Wi‑Fi blocks this too ✿")
+        elif sys.platform == "win32" and not self.settings.sent_to_phone:
+            text = "Same Wi‑Fi as this computer, please ✿ If Windows asks about network access, tap Allow so your phone can see me"
+        else:
+            text = "Same Wi‑Fi as this computer, please ✿"
+        self.hint.setText(text)
+
+    def _tick(self) -> None:
+        self._hint()
+        if time.monotonic() - self.share.last_activity > self.IDLE_STOP:
+            self.share.stop()
+            self.timer.stop()
+            self.qr_card.hide()
+            self.address.hide()
+            self.scan.setText("Stopped sharing ✿")
+            self.hint.setText("Open me again anytime")
+            self.stop_btn.setText(" Close")
+
+    def _on_event(self, kind: str, i: int, sent: int, total: int, device: str = "a phone") -> None:
+        if device not in self.devices:
+            self.devices.append(device)
+            self._show_devices()
+        if kind == "visit":
+            self.visited = True
+            self._hint()
+            return
+        going = self.going.setdefault(i, {})
+        if kind == "progress":
+            going[device] = sent / total if total else 0
+        elif kind in ("cancelled", "done"):
+            going.pop(device, None)
+        if kind == "done":
+            if device not in self.sent.setdefault(i, []):
+                self.sent[i].append(device)
+            if not self.settings.sent_to_phone:
+                self.settings.sent_to_phone = True
+                self.settings.save()
+        self._show_row(i)
+        self._celebrate()
+
+    def _show_row(self, i: int) -> None:
+        """Sent once any device has it (hover says which); else the furthest download; else the size."""
+        row, going, got = self.rows[i], self.going.get(i, {}), self.sent.get(i, [])
+        row["sent"].setVisible(bool(got))
+        row["sent"].setToolTip("Sent to " + self._names(got) if got else "")
+        row["bar"].setVisible(bool(going) and not got)
+        row["size"].setVisible(not going and not got)
+        if going:
+            row["bar"].setValue(int(1000 * max(going.values())))
+
+    @staticmethod
+    def _names(names: list[str]) -> str:
+        return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+    def _show_devices(self) -> None:
+        """"Connected: iPhone · iPad ✦"; past three it says how many more, and hovering lists them all."""
+        keep = lambda text: text.replace(" ", "\u00a0")  # lines only break between names
+        shown = [keep(name) for name in self.devices[:3]]
+        more = len(self.devices) - len(shown)
+        if more:
+            shown.append(keep(f"+{more} more"))
+        self.connected.setText(keep("Connected:") + " " + " · ".join(shown) + "\u00a0✦")
+        self.connected.setToolTip(self._names(self.devices) if more else "")
+        self.connected.show()
+
+    def _celebrate(self) -> None:
+        """Once every ticked file has gone to a phone, the cat cheers."""
+        done = bool(self.share.allowed) and all(self.sent.get(i) for i in self.share.allowed)
+        if done and not self.happy.isVisible():
+            self.cat.stop()
+            self.happy.start()
+            self.sub.setText("All on your phone! ♥")
+        elif not done and self.happy.isVisible():
+            self.happy.stop()
+            self.cat.start()
+            self.sub.setText("Pick the files, then scan the code with your phone's camera")
 
 
 class MascotLogo(QWidget):

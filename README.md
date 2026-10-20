@@ -54,6 +54,8 @@
 - 💾 **Picks up where it stopped**: cancel, close, come back later; finished files are skipped.
 - 🗂️ **A Library**: every manga you've downloaded, how much of the series you have, and a "new"
   badge when chapters come out.
+- 📱 **Send to your phone**: scan a QR code with your phone's camera and save the files straight
+  from its browser, over your home Wi‑Fi. Nothing to install on the phone.
 - 🌙 **Light and dark**, or follow your system.
 - 🎁 **Updates itself**: when a new version is out, one click and it's done.
 
@@ -158,7 +160,8 @@ closed, that spot shows the delivery cat and how far along it is:
    Tap a column title to sort by it: once for up, twice for down, a third time (or a
    right-click) to go back to normal.
 4. Press **Download**. Each file gets its own progress bar; **Cancel** stops after the
-   current page, and **Open folder** shows the results when it's done.
+   current page, and **Open folder** shows the results when it's done. **Send to phone** sends
+   them to your phone (see below).
 
 Running it again with the same choices resumes where it stopped. Files that already exist
 are skipped, so delete a file to rebuild it. The exception: if the site has added chapters
@@ -178,6 +181,7 @@ of all chapters on the site), and what failed or is still waiting.
 - **Continue** picks up chapters from a download that was cancelled or interrupted.
 - **Retry failed** downloads the chapters that failed again.
 - **Folder** opens the folder with that manga's downloaded files.
+- **Phone** sends that manga's files to your phone (see below).
 - **Open** loads the manga on the Download page with what you already have marked, so you can
   pick more.
 - Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
@@ -187,6 +191,20 @@ of all chapters on the site), and what failed or is still waiting.
 - The × on a card (or **Remove from library** on the Download page) takes a manga off the
   library. If it has downloaded files, you choose to keep them or delete them too. Kept files
   still count: open that manga again and it shows what you have, ready to add back.
+
+**Send to your phone**
+
+Tick the files you want and scan the QR code with your phone's camera. A page opens in the
+phone's browser with a **Save** button for each file (and **Save all as one zip**). The phone and
+computer need to be on the same Wi‑Fi; nothing goes through the internet.
+
+- The first time on Windows, it may ask whether Nyanga can use the network: press **Allow**.
+- Sharing stops when you close the window, or by itself after 15 minutes of nothing happening.
+- If the phone can't open the page, turn off any VPN on it. Some guest or school Wi‑Fi keeps
+  devices apart, so it won't work there.
+- On an iPhone, saved files go to **Files → Downloads**. Keep the screen on until a big download
+  finishes.
+- PDF and EPUB open on any phone. CBZ needs a comic reader app, and image folders arrive as zips.
 
 **Settings page**
 

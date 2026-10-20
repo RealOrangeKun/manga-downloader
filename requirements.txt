@@ -2,3 +2,4 @@ requests
 pillow
 img2pdf
 PySide6
+segno

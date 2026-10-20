@@ -133,7 +133,11 @@ QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selec
     background: $selection; color: $accent_soft;
 }
 QFrame#toast { background: $chip; border-radius: 13px; }
-QDialog#whatsNew { background: $bg; }
+QDialog#whatsNew, QDialog#sendPhone { background: $bg; }
+QFrame#phoneFile { background: $card; border: 1px solid $border; border-radius: 14px; }
+QFrame#qrCard { background: #ffffff; border-radius: 18px; }
+QLabel#address { color: $muted; font-size: 12px; }
+QLabel#phoneSent { color: $ok; font-weight: 600; font-size: 12px; }
 QFrame#noteItem { background: $card; border: 1px solid $border; border-radius: 14px; }
 QLabel#noteSection { font-size: 15px; font-weight: 700; color: $accent; padding-top: 4px; }
 QLabel#noteTitle { font-size: 14px; font-weight: 600; }
@@ -282,6 +286,8 @@ _ICONS = {
     "list": '<path d="M9 7h10M9 12h10M9 17h6" stroke="COLOR" stroke-width="2.4" stroke-linecap="round"/>'
             '<circle cx="5" cy="7" r="1.4" fill="COLOR"/><circle cx="5" cy="12" r="1.4" fill="COLOR"/>'
             '<circle cx="5" cy="17" r="1.4" fill="COLOR"/>',
+    "phone": '<rect x="6.5" y="2.8" width="11" height="18.4" rx="2.8" fill="none" stroke="COLOR" stroke-width="2.2"/>'
+             '<path d="M10.6 17.4h2.8" stroke="COLOR" stroke-width="2.2" stroke-linecap="round"/>',
 }
 
 # The app's mascot: a happy cat face (the same cat as in loader.py) with a heart. Drawn for this app.
@@ -317,6 +323,10 @@ def icon(name: str, color: str | QColor, size: int = 48) -> QIcon:
     hex_color = QColor(color).name()
     svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{_ICONS[name].replace("COLOR", hex_color)}</svg>'
     return QIcon(_render(svg, size))
+
+
+def app_svg() -> str:
+    return _APP_ICON
 
 
 def app_pixmap(size: int = 128) -> QPixmap:
