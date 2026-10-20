@@ -166,7 +166,7 @@ def rounded_pixmap(data: bytes | None, w: int, h: int, radius: int = 16) -> QPix
         p.fillRect(0, 0, w, h, theme.color(CURRENT["mode"], "chip"))
         p.setPen(theme.color(CURRENT["mode"], "accent"))
         p.setFont(QFont(p.font().family(), min(40, max(14, w * 3 // 5))))
-        p.drawText(QRectF(0, 0, w, h), Qt.AlignCenter, "♡")
+        p.drawText(QRectF(0, 0, w, h), Qt.AlignCenter, "♥")
     p.end()
     return out
 
@@ -339,7 +339,7 @@ class ResultItem(QFrame):
         lrow.setSpacing(4)
         self.loading_cat = MiniCat(lambda: CURRENT["mode"], (30, 18))
         lrow.addWidget(self.loading_cat)
-        lrow.addWidget(label("reading its page ✧", "meta"))
+        lrow.addWidget(label("reading its page ✦", "meta"))
         lrow.addStretch(1)
         self.loading.hide()
         if grid:  # a tile: cover on top, title underneath
@@ -622,7 +622,7 @@ def remove_from_library(parent: QWidget, history: History, key: str, busy: bool 
     title = entry.get("title", "this manga")
     if busy:
         QMessageBox.information(parent, "Still downloading", f"{title} is downloading right now. "
-                                "Remove it once that's done ✧")
+                                "Remove it once that's done ✦")
         return False
     files = history.files(key)
     if not files:
@@ -725,7 +725,7 @@ class DownloadPage(QWidget):
         scroll.setWidget(body)
         outer.addWidget(scroll, 1)
 
-        col.addWidget(label("Download a manga ✧", "h1"))
+        col.addWidget(label("Download a manga ✦", "h1"))
 
         # find
         find, fl = card()
@@ -736,7 +736,7 @@ class DownloadPage(QWidget):
         self.source.setCurrentIndex(max(0, self.source.findData(settings.default_source)))
         self.source.setToolTip("Where to search")
         self.source.currentIndexChanged.connect(self._source_changed)
-        self.query = QLineEdit(placeholderText="Type a manga name, like One Piece ✧", maxLength=200)
+        self.query = QLineEdit(placeholderText="Type a manga name, like One Piece ✦", maxLength=200)
         self.query.returnPressed.connect(self._find)
         self.fetch_btn = set_icon(QPushButton(" Search", objectName="primary"), "search", "white")
         self.fetch_btn.clicked.connect(self._find)
@@ -766,7 +766,7 @@ class DownloadPage(QWidget):
         # search results
         self.results_card, rl = card()
         rhead = QHBoxLayout()
-        rhead.addWidget(label("Pick one ✧", "h2"))
+        rhead.addWidget(label("Pick one ✦", "h2"))
         rhead.addSpacing(10)
         self.view_btns = QButtonGroup(self)
         for grid, icon, tip in ((False, "list", "Show as a list"), (True, "grid", "Show as a grid of covers")):
@@ -789,7 +789,7 @@ class DownloadPage(QWidget):
         rhead.addStretch(1)
         self.results_dots = MiniCat(lambda: CURRENT["mode"])
         rhead.addWidget(self.results_dots)
-        self.results_wait = label("fetching more ✧", "meta")
+        self.results_wait = label("fetching more ✦", "meta")
         self.results_wait.hide()
         rhead.addWidget(self.results_wait)
         self.results_count = label("", "meta")
@@ -859,7 +859,7 @@ class DownloadPage(QWidget):
         right.addLayout(self.chips)
         self.about_lbl = label("", "about", wrap=True)
         self.about_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.about_more = QPushButton("Read more ✧", objectName="link")
+        self.about_more = QPushButton("Read more ✦", objectName="link")
         self.about_more.setCursor(Qt.PointingHandCursor)
         self.about_more.clicked.connect(lambda: self._show_about(not self.about_open))
         self.about_open = False
@@ -897,7 +897,7 @@ class DownloadPage(QWidget):
         head.addWidget(self.summary)
         self.summary_dots = MiniCat(lambda: CURRENT["mode"])
         head.addWidget(self.summary_dots)
-        self.summary_wait = label("weighing pages ✧", "meta")
+        self.summary_wait = label("weighing pages ✦", "meta")
         self.summary_wait.hide()
         head.addWidget(self.summary_wait)
         tl.addLayout(head)
@@ -919,7 +919,7 @@ class DownloadPage(QWidget):
         self.sort: tuple[int, bool] | None = None  # (column, descending)
         hh.setSectionsClickable(True)
         hh.setCursor(Qt.PointingHandCursor)
-        hh.setToolTip("Tap to sort ✧ right-click to unsort")
+        hh.setToolTip("Tap to sort ✦ right-click to unsort")
         hh.sectionClicked.connect(self._sort_clicked)
         hh.setContextMenuPolicy(Qt.CustomContextMenu)
         hh.customContextMenuRequested.connect(lambda *_: self._set_sort(None))
@@ -994,7 +994,7 @@ class DownloadPage(QWidget):
         self.range_btn.clicked.connect(self._select_range)
         ranges.addWidget(self.range_btn)
         ranges.addSpacing(12)
-        ranges.addWidget(label("Shift-click a paw to tick everything in between, or drag across them ✧",
+        ranges.addWidget(label("Shift-click a paw to tick everything in between, or drag across them ✦",
                                "hint", wrap=True), 1)
         tl.addLayout(ranges)
         self.files_card.hide()
@@ -1009,7 +1009,7 @@ class DownloadPage(QWidget):
         self.bar_cat = CatLoader(lambda: CURRENT["mode"], (62, 50))
         bl.addWidget(self.bar_cat)
         info = QVBoxLayout()
-        self.status_lbl = label("Search for a manga to get started ♡", "meta")
+        self.status_lbl = label("Search for a manga to get started ♥", "meta")
         self.overall = QProgressBar(maximum=1000, textVisible=False)
         self.overall.setFixedHeight(12)
         status_row = QHBoxLayout()
@@ -1017,7 +1017,7 @@ class DownloadPage(QWidget):
         status_row.addWidget(self.status_lbl)
         self.status_dots = MiniCat(lambda: CURRENT["mode"])
         status_row.addWidget(self.status_dots)
-        self.status_wait = label("weighing pages ✧", "meta")
+        self.status_wait = label("weighing pages ✦", "meta")
         self.status_wait.hide()
         status_row.addWidget(self.status_wait)
         status_row.addStretch(1)
@@ -1044,7 +1044,7 @@ class DownloadPage(QWidget):
     # ---- fetching
 
     def _idle_hint(self) -> str:
-        return "Pasting a link to a title works too ✧"
+        return "Pasting a link to a title works too ✦"
 
     def _start_lookup(self, title: str, text: str) -> None:
         self.lookup_title.setText(title)
@@ -1067,15 +1067,15 @@ class DownloadPage(QWidget):
         n = self.filters.count()
         self.filter_btn.setText(f" Filters ({n})" if n else " Filters")
         self.filters.clear_btn.setVisible(bool(n))
-        self.query.setPlaceholderText("Type a manga name, or leave it empty to browse ✧" if n
-                                      else "Type a manga name, like One Piece ✧")
+        self.query.setPlaceholderText("Type a manga name, or leave it empty to browse ✦" if n
+                                      else "Type a manga name, like One Piece ✦")
 
     def _find(self) -> None:
         text = self.query.text().strip()
         site_cls = core.site_named(self.source.currentData())
         filters = self.filters.filters() if FilterPanel.supports(site_cls) else core.SearchFilters()
         if not text and not filters:
-            self._hint("Type a manga name first, or pick some filters ✧", error=True)
+            self._hint("Type a manga name first, or pick some filters ✦", error=True)
             return
         if core.site_for(text):
             self._fetch(text)
@@ -1096,7 +1096,7 @@ class DownloadPage(QWidget):
         self.search_pages, self.search_page, self.search_total, self.search_loading = {}, 1, 1, 0
         self.search_resort = None
         self._hint(f"Searching {site_cls.name}…")
-        self._start_lookup("Searching…" if text else "Browsing…", f"Asking {site_cls.name} for matches ✧")
+        self._start_lookup("Searching…" if text else "Browsing…", f"Asking {site_cls.name} for matches ✦")
         self._search_page(1)
 
     def _search_page(self, page: int) -> None:
@@ -1134,7 +1134,7 @@ class DownloadPage(QWidget):
         self.search_sort, self.search_resort = sort, self.search_sort
         self.search_loading = 1
         self._results_waiting(True)
-        self.results_wait.setText("sorting ✧")
+        self.results_wait.setText("sorting ✦")
         self._search_page(1)
 
     def _goto_results(self, page: int) -> None:
@@ -1145,7 +1145,7 @@ class DownloadPage(QWidget):
             return
         self.search_loading = page  # fetch it from the site first
         self._results_waiting(True)
-        self.results_wait.setText("fetching more ✧")
+        self.results_wait.setText("fetching more ✦")
         self._search_page(page)
 
     def _results_waiting(self, on: bool) -> None:
@@ -1181,7 +1181,7 @@ class DownloadPage(QWidget):
                 self._results_waiting(False)
                 self._clear_results()
                 self.results_card.hide()
-                self._hint(f"{site_cls.name} didn't send anything back in that order. Try another ✧", error=True)
+                self._hint(f"{site_cls.name} didn't send anything back in that order. Try another ✦", error=True)
                 return
         fresh = not self.search_pages
         if fresh:
@@ -1190,13 +1190,13 @@ class DownloadPage(QWidget):
             if not results:
                 self._clear_results()
                 if self.search_filters:
-                    self._hint(f"Nothing on {site_cls.name} fits those filters. Try loosening them a little ✧",
+                    self._hint(f"Nothing on {site_cls.name} fits those filters. Try loosening them a little ✦",
                                error=True)
                 else:
-                    self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✧", error=True)
+                    self._hint(f"Nothing called “{query}” on {site_cls.name}. Try another spelling ✦", error=True)
                 return
             many = f"{pages} pages of matches" if pages > 1 else f"{len(results)} {'match' if len(results) == 1 else 'matches'}"
-            self._hint(f"Found {many} on {site_cls.name}. Pick the one you want ♡")
+            self._hint(f"Found {many} on {site_cls.name}. Pick the one you want ♥")
         self.search_loading = 0
         self._results_waiting(False)
         self.search_total = max(pages, page)
@@ -1329,7 +1329,7 @@ class DownloadPage(QWidget):
         self._hint("Looking it up…")
         self.manga_card.hide()
         self.files_card.hide()
-        self._start_lookup("Looking it up…", "Reading the chapter list and cover ✧")
+        self._start_lookup("Looking it up…", "Reading the chapter list and cover ✦")
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def work() -> None:
@@ -1486,7 +1486,7 @@ class DownloadPage(QWidget):
         if self._checked_rows():
             self._start()
         else:
-            self._status("Nothing left to download ♡")
+            self._status("Nothing left to download ♥")
 
     ABOUT_SHORT = 320  # characters of the description shown before "Read more"
 
@@ -1498,7 +1498,7 @@ class DownloadPage(QWidget):
             text = text[:self.ABOUT_SHORT].rsplit(" ", 1)[0].rstrip(".,;: ") + "…"
         self.about_lbl.setText(text)
         self.about_lbl.setVisible(bool(text))
-        self.about_more.setText("Show less" if self.about_open else "Read more ✧")
+        self.about_more.setText("Show less" if self.about_open else "Read more ✦")
         self.about_more.setVisible(long)
 
     def _cover_size(self) -> QSize:
@@ -1756,7 +1756,7 @@ class DownloadPage(QWidget):
                 self.smart["missing"].append(i)
             if failed & set(keys):
                 self.smart["failed"].append(i)
-        for kind, name in (("new", "New ✧"), ("missing", "Not downloaded"), ("failed", "Failed")):
+        for kind, name in (("new", "New ✦"), ("missing", "Not downloaded"), ("failed", "Failed")):
             self.smart_btns[kind].setText(f" {name} ({len(self.smart[kind])})")
             self.smart_btns[kind].setEnabled(bool(self.smart[kind]) and not self.running)
 
@@ -1784,7 +1784,7 @@ class DownloadPage(QWidget):
                 bar.setFormat("Failed last time")
                 state = core.FAILED
             elif self.new_keys & set(keys):
-                bar.setFormat("New ✧")
+                bar.setFormat("New ✦")
             bar.setProperty("state", state)
             repolish(bar)
         self.table.blockSignals(False)
@@ -2014,10 +2014,10 @@ class DownloadPage(QWidget):
             self._status("Cancelled", "Run it again with the same choices to resume")
         elif failed:
             self._status(f"{len(failed)} of {len(self.fractions)} files failed",
-                         "Hover a bar for the reason, then run again to resume ✧")
+                         "Hover a bar for the reason, then run again to resume ✦")
         else:
             self.overall.setValue(1000)
-            self._status("All done ♡", f"Took {took}  ·  {self.book_dir}")
+            self._status("All done ♥", f"Took {took}  ·  {self.book_dir}")
             self.completed.emit(self.info.title, len(self.fractions), str(self.book_dir))
 
     def _cancel(self) -> None:
@@ -2177,15 +2177,15 @@ class SettingsPage(QWidget):
         if state == appmenu.OURS:
             swap_icon(self.menu_btn, "close")
             self.menu_btn.setText(" Remove Nyanga from your app menu")
-            self.menu_hint.setText("Nyanga is in your app menu ✧")
+            self.menu_hint.setText("Nyanga is in your app menu ✦")
         elif state == appmenu.THEIRS:
             swap_icon(self.menu_btn, "heart")
-            self.menu_btn.setText(" Already in your app menu ✧")
+            self.menu_btn.setText(" Already in your app menu ✦")
             self.menu_hint.setText("Another app (like Gear Lever) added Nyanga to your menu, so it's all set.")
         else:
             swap_icon(self.menu_btn, "heart")
             self.menu_btn.setText(" Add Nyanga to your app menu")
-            self.menu_hint.setText("Open Nyanga from your app menu like any other app, no need to find the file ♡")
+            self.menu_hint.setText("Open Nyanga from your app menu like any other app, no need to find the file ♥")
 
     def _toggle_menu(self) -> None:
         try:
@@ -2197,7 +2197,7 @@ class SettingsPage(QWidget):
                 buffer.open(QBuffer.WriteOnly)
                 theme.app_pixmap(256).save(buffer, "PNG")
                 appmenu.add(bytes(buffer.data()))
-                self._toast("Added to your app menu ✧")
+                self._toast("Added to your app menu ✦")
         except OSError as e:
             self._toast(f"Could not change the app menu: {e}", error=True)
         self._sync_menu()
@@ -2245,7 +2245,7 @@ class SettingsPage(QWidget):
         return self._form() != self.settings
 
     def nag(self) -> None:
-        self._toast("Save or undo your changes first ♡", error=True)
+        self._toast("Save or undo your changes first ♥", error=True)
 
     def _update_dirty(self, *_) -> None:
         for b in (self.save_btn, self.undo_btn):
@@ -2307,7 +2307,7 @@ class LibraryPage(QWidget):
         outer.addWidget(scroll)
 
         self.head = head = QHBoxLayout()
-        head.addWidget(label("Library ✧", "h1"))
+        head.addWidget(label("Library ✦", "h1"))
         head.addStretch(1)
         self.check_cat = MiniCat(lambda: CURRENT["mode"])
         head.addWidget(self.check_cat)
@@ -2323,7 +2323,7 @@ class LibraryPage(QWidget):
         etext = QVBoxLayout()
         etext.addStretch(1)
         etext.addWidget(label("Nothing here yet", "h2"))
-        etext.addWidget(label("Download a manga and it will show up here ✧", "hint"))
+        etext.addWidget(label("Download a manga and it will show up here ✦", "hint"))
         etext.addStretch(1)
         erow.addLayout(etext)
         erow.addStretch(1)
@@ -2405,7 +2405,7 @@ class LibraryPage(QWidget):
         folder = self._folder(entry)
         folder_btn = set_icon(QPushButton(" Folder"), "folder")
         folder_btn.setEnabled(folder is not None)
-        folder_btn.setToolTip(f"Show the files in {folder}" if folder else "Nothing downloaded yet ✧")
+        folder_btn.setToolTip(f"Show the files in {folder}" if folder else "Nothing downloaded yet ✦")
         folder_btn.clicked.connect(lambda: self._open_folder(key))
         buttons.addWidget(folder_btn)
         open_btn = set_icon(QPushButton(" Open"), "library")
@@ -2452,7 +2452,7 @@ class LibraryPage(QWidget):
         w["meta"].setText("  ·  ".join(parts))
         w["when"].setText(f"Last download: {ago(entry.get('last_download'))}")
         new = entry.get("new_chapters", 0)
-        w["badge"].setText(f"{new} new ✧")
+        w["badge"].setText(f"{new} new ✦")
         w["badge"].setVisible(bool(new))
 
     def _set_checking(self, key: str, on: bool) -> None:
@@ -2564,14 +2564,14 @@ class Notification(QWidget):
     def popup(self, title: str, files: int, folder: str) -> None:
         self.folder = folder
         self._show("Yay, it's ready!", f"<b>{html.escape(title)}</b> is all downloaded! "
-                   f"{files} {'file is' if files == 1 else 'files are'} waiting for you. Happy reading ✧",
+                   f"{files} {'file is' if files == 1 else 'files are'} waiting for you. Happy reading ✦",
                    update=False)
         self.timer.start()
 
     def offer_update(self, version: str) -> None:
         """Stays until Later or Update now is pressed."""
         self._show("A new version is out!", f"Version <b>{html.escape(version)}</b> is ready (you have "
-                   f"{html.escape(__version__)}). Updating takes a moment and keeps your settings and library ✧",
+                   f"{html.escape(__version__)}). Updating takes a moment and keeps your settings and library ✦",
                    update=True)
         self.timer.stop()
 
@@ -2664,8 +2664,8 @@ class Notification(QWidget):
 class WhatsNew(QDialog):
     """The changes in one or more releases, in plain words, grouped into new things, fixes and so on."""
 
-    SECTIONS = {"breaking": "Heads up: this works a bit differently", "feat": "✧  New things",
-                "fix": "♡  Fixed", "perf": "✿  Faster"}
+    SECTIONS = {"breaking": "Heads up: this works a bit differently", "feat": "✦  New things",
+                "fix": "♥  Fixed", "perf": "✿  Faster"}
 
     def __init__(self, parent: QWidget, releases: list[dict], subtitle: str):
         super().__init__(parent, objectName="whatsNew")
@@ -2677,7 +2677,7 @@ class WhatsNew(QDialog):
         self.cat = CatLoader(lambda: CURRENT["mode"], (100, 80), celebrate=True)
         outer.addWidget(self.cat, 0, Qt.AlignHCenter)
         self.cat.start()  # only once it's in the dialog, or it pops up as a window of its own
-        outer.addWidget(label("What's new ✧", "h1"), 0, Qt.AlignHCenter)
+        outer.addWidget(label("What's new ✦", "h1"), 0, Qt.AlignHCenter)
         sub = label(subtitle, "hint", wrap=True)
         sub.setAlignment(Qt.AlignCenter)
         outer.addWidget(sub)
@@ -2706,7 +2706,7 @@ class WhatsNew(QDialog):
         outer.addWidget(scroll, 1)
 
         outer.addSpacing(10)
-        ok = QPushButton("Got it ♡", objectName="primary")
+        ok = QPushButton("Got it ♥", objectName="primary")
         ok.setCursor(Qt.PointingHandCursor)
         ok.clicked.connect(self.accept)
         outer.addWidget(ok, 0, Qt.AlignHCenter)
@@ -2758,7 +2758,7 @@ class MascotLogo(QWidget):
         super().__init__()
         self.setFixedSize(self.SIZE + 8, self.SIZE + self.HOP)
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Boop ♡")
+        self.setToolTip("Boop ♥")
         self.pixmap = theme.app_pixmap(96)
         self.t = 0.0
         self.anim = QVariantAnimation(self, startValue=0.0, endValue=1.0, duration=650)
@@ -2923,10 +2923,10 @@ class MainWindow(QWidget):
         brand.addStretch(1)
         sl.addLayout(brand)
         sl.addSpacing(4)
-        self.tagline = label("cute & cozy ✧", "tagline")
+        self.tagline = label("cute & cozy ✦", "tagline")
         sl.addWidget(self.tagline)
         self.tagline_reset = QTimer(self, singleShot=True, interval=1800)
-        self.tagline_reset.timeout.connect(lambda: self.tagline.setText("cute & cozy ✧"))
+        self.tagline_reset.timeout.connect(lambda: self.tagline.setText("cute & cozy ✦"))
         sl.addSpacing(22)
         self.stack = QStackedWidget()
         self.history = History()
@@ -2974,7 +2974,7 @@ class MainWindow(QWidget):
             sl.addWidget(label("HI LIL GOMIEE!!", "greeting"))
         version = QPushButton(f"version {__version__}", objectName="version")
         version.setCursor(Qt.PointingHandCursor)
-        version.setToolTip("What's new in this version ✧")
+        version.setToolTip("What's new in this version ✦")
         version.clicked.connect(self._show_all_notes)
         sl.addWidget(version, 0, Qt.AlignLeft)
 
@@ -3030,14 +3030,14 @@ class MainWindow(QWidget):
         except OSError:
             pass  # shows again next time, no harm
         if releases:
-            WhatsNew(self, releases, f"Nyanga just updated to version {__version__}. Here's what changed ♡").exec()
+            WhatsNew(self, releases, f"Nyanga just updated to version {__version__}. Here's what changed ♥").exec()
 
     def _show_all_notes(self) -> None:
         releases = updater.notes_since("0.0.0")
         if not releases:  # running from source: nothing bundled, so show the changelog online
             QDesktopServices.openUrl(QUrl(updater.notes_url()))
             return
-        WhatsNew(self, releases, f"You're on version {__version__}. Every update so far, newest first ♡").exec()
+        WhatsNew(self, releases, f"You're on version {__version__}. Every update so far, newest first ♥").exec()
 
     @staticmethod
     def _resolve(choice: str) -> str:
@@ -3074,7 +3074,7 @@ class MainWindow(QWidget):
         self.settings_page._update_dirty()
         self.apply_theme(self.settings.theme)
 
-    MEOWS = ["nya~ ♡", "mrrp! ✧", "purr purr ♡", "meow? ✿", "*happy tail swish* ✧", "nyaa~ ✿"]
+    MEOWS = ["nya~ ♥", "mrrp! ✦", "purr purr ♥", "meow? ✿", "*happy tail swish* ✦", "nyaa~ ✿"]
 
     def _mascot_clicked(self) -> None:
         options = [m for m in self.MEOWS if m != self.tagline.text()]
@@ -3099,7 +3099,7 @@ class MainWindow(QWidget):
 
     def _open_from_library(self, url: str, action: str) -> None:
         if self.download.running:
-            self.download._status("A download is still running", "Wait for it to finish, then try again ✧")
+            self.download._status("A download is still running", "Wait for it to finish, then try again ✦")
         else:
             self.download.open_manga(url, action)
         self.show_page(0)
@@ -3165,7 +3165,7 @@ class MainWindow(QWidget):
             return
         if self.download.running:
             self.notification.show_update()
-            self.notification.update_status("A download is still going. Update once it's finished ✧", busy=False)
+            self.notification.update_status("A download is still going. Update once it's finished ✦", busy=False)
             self._sync_pill()
             return
         self._set_update_state("updating", "Updating…")
@@ -3192,14 +3192,14 @@ class MainWindow(QWidget):
             self.installer = installer
             self._set_update_state("ready", "Install update")
             self.notification.update_status("The update is ready! Press Install update at the top right "
-                                            "once your download is done ✧", busy=False)
+                                            "once your download is done ✦", busy=False)
             return
         try:
             updater.install(installer)
         except OSError as e:
             self._update_failed(str(e))
             return
-        self.notification.update_status("Installing! The app reopens by itself in a few seconds ✧")
+        self.notification.update_status("Installing! The app reopens by itself in a few seconds ✦")
         self.pill.set_state("Installing…", busy=True)
         self._place_pill()
         QTimer.singleShot(800, QApplication.instance().quit)

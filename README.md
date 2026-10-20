@@ -5,7 +5,7 @@
 <h1 align="center">Nyanga</h1>
 
 <p align="center">
-  <b>a cute &amp; cozy pink app that downloads manga for you ✧</b><br>
+  <b>a cute &amp; cozy pink app that downloads manga for you ✦</b><br>
   <i>nyan + manga: the cat fetches your chapters</i><br>
   one file per volume: CBZ, PDF, EPUB or plain image folders
 </p>
@@ -40,7 +40,7 @@
   </picture>
 </p>
 
-## ♡ What it does
+## ♥ What it does
 
 - 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres, story and
   every chapter show up, with the size of each file. Show the results as a list or a grid of covers,
@@ -90,7 +90,7 @@ so they follow the light and dark theme.
   </tr>
 </table>
 
-Psst: give the cat in the top-left corner a tap ♡
+Psst: give the cat in the top-left corner a tap ♥
 
 ## 💝 Install (Windows)
 
@@ -101,7 +101,7 @@ Psst: give the cat in the top-left corner a tap ♡
    the installed app and its updates aren't flagged.
 3. Open **Nyanga** from the Start menu.
 
-That's the only time you install it ✧
+That's the only time you install it ✦
 
 ## 🐧 Install (Linux)
 
@@ -150,7 +150,7 @@ closed, that spot shows the delivery cat and how far along it is:
 3. Tap the paws of the files you want. Shift-click a paw to tick everything since the last one
    you tapped, or drag across paws to tick (or untick) a run of them. Under the table:
    - **Select all / none**, and **Select page** for just the files on screen.
-   - **New ✧**, **Not downloaded** and **Failed** pick files from your download history.
+   - **New ✦**, **Not downloaded** and **Failed** pick files from your download history.
    - **Volumes / Chapters … to …** ticks every file in that range. Chapters that are in a volume
      are picked by volume; **Chapters** covers the newer ones that aren't in a volume yet.
 
@@ -242,7 +242,7 @@ After the first time, only the last line is needed.
 - Commit messages are [conventional commits](https://www.conventionalcommits.org) (`fix:`,
   `feat:`, `docs:`...). They decide the next version and become the release notes; the subject and body also show
   up in the app's What's new window, so write them for someone who's never seen the code.
-- Please follow the [code of conduct](CODE_OF_CONDUCT.md) ♡
+- Please follow the [code of conduct](CODE_OF_CONDUCT.md) ♥
 
 ## ✿ Credits
 
@@ -257,5 +257,5 @@ contributions back here, but you can't publish your own version or build another
 See [LICENSE](LICENSE) for the details.
 
 <p align="center">
-  <sub>made with ♡ and a lot of cat drawings</sub>
+  <sub>made with ♥ and a lot of cat drawings</sub>
 </p>

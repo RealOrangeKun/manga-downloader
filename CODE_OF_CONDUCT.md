@@ -1,4 +1,4 @@
-# Code of Conduct ♡
+# Code of Conduct ♥
 
 Nyanga is a small, cozy project. Let's keep it that way, in issues, pull requests and anywhere
 else we talk about it.
