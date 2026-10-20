@@ -25,11 +25,25 @@ import paths
 
 COOKIE = "nyanga_device"
 PORT = 8765  # tried first so the address stays the same between shares; any free port otherwise
+
 CHUNK = 256 * 1024
 TYPES = {".cbz": "application/vnd.comicbook+zip", ".epub": "application/epub+zip", ".pdf": "application/pdf",
          ".zip": "application/zip"}
 TIPS = {".cbz": "CBZ files open in a comic reader app ✿", ".epub": "EPUB files open in Books or any ebook app ✿",
         ".zip": "Folders come as zips of pictures, a comic reader app opens them ✿"}
+
+
+class _Server(ThreadingHTTPServer):
+    """Takes the port only if nobody else has it. On Windows, the usual SO_REUSEADDR lets a second
+    server bind a port that's already in use (another Nyanga window still sharing), and phones then
+    reach the old one, which doesn't know the new address and says "Not here"."""
+
+    allow_reuse_address = not hasattr(socket, "SO_EXCLUSIVEADDRUSE")
+
+    def server_bind(self) -> None:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def local_ip() -> str | None:
@@ -149,7 +163,7 @@ class Share:
         self.on_event = on_event
         self.token = secrets.token_urlsafe(6)
         self.last_activity = time.monotonic()
-        self.server: ThreadingHTTPServer | None = None
+        self.server: _Server | None = None
         self.clients: set[socket.socket] = set()  # open connections: phones keep theirs open between requests
         self.url = ""
 
@@ -160,9 +174,9 @@ class Share:
             return None
         handler = type("Handler", (_Handler,), {"share": self})
         try:
-            self.server = ThreadingHTTPServer(("0.0.0.0", PORT), handler)
+            self.server = _Server(("0.0.0.0", PORT), handler)
         except OSError:
-            self.server = ThreadingHTTPServer(("0.0.0.0", 0), handler)
+            self.server = _Server(("0.0.0.0", 0), handler)
         self.server.daemon_threads = True
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.url = f"http://{ip}:{self.server.server_address[1]}/{self.token}/"
