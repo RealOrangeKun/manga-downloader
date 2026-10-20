@@ -272,36 +272,8 @@ def _sparkle(p: QPainter, c: QPointF, r: float, color: QColor) -> None:
     p.drawPath(star)
 
 
-def paint_update_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
-    """The cat bringing the new version: it hugs a hopping gift box while sparkles twinkle around."""
-    cat = {k: QColor(v) for k, v in CAT[mode].items()}
-    box = theme.color(mode, "accent")
-    p.save()
-    scale = min(rect.width() / 40, rect.height() / 34)
-    p.translate(rect.center().x() - 20 * scale, rect.center().y() - 17 * scale)
-    p.scale(scale, scale)
-
-    for i, (x, y, r) in enumerate(((4.5, 10, 3.4), (36, 5, 2.8), (35.5, 15, 2.1))):
-        k = (math.sin(t * 3 - i * 2.1) + 1) / 2  # each one twinkles in turn
-        if k > 0.15:
-            color = QColor(box)
-            color.setAlphaF(0.35 + 0.65 * k)
-            _sparkle(p, QPointF(x, y), r * (0.5 + 0.5 * k), color)
-
-    p.translate(0, -abs(math.sin(t * 3.4)) * 2.4)  # hop, hop
-
-    swish = math.sin(t * 3.2) * 3
-    tail = QPainterPath(QPointF(29, 25))
-    tail.cubicTo(QPointF(35, 25), QPointF(37 + swish * 0.3, 19), QPointF(35 + swish, 13))
-    p.setPen(QPen(cat["line"], 3.4, Qt.SolidLine, Qt.RoundCap))
-    p.drawPath(tail)
-    p.setPen(QPen(cat["fur"], 1.8, Qt.SolidLine, Qt.RoundCap))
-    p.drawPath(tail)
-
-    # The head peeks over the box, so the box is drawn after it.
-    p.save()
-    p.translate(20, 13)
-    p.rotate(math.sin(t * 2.4) * 6)
+def _happy_head(p: QPainter, cat: dict, t: float) -> None:
+    """The cat's face with ^ ^ eyes, centred on (0, 0) and 18 wide; the left ear flicks now and then."""
     twitch = 10 if (t % 2.6) > 2.42 else 0  # the left ear flicks now and then
     p.setPen(QPen(cat["line"], 1.4))
     p.setBrush(cat["fur"])
@@ -334,6 +306,39 @@ def paint_update_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
     for bx in (-5.8, 5.8):
         p.drawEllipse(QRectF(bx - 1.9, 1.6, 3.8, 2.1))
     CatLoader._heart(p, QPointF(0, 2.2), 1.3, cat["nose"])
+
+
+def paint_update_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
+    """The cat bringing the new version: it hugs a hopping gift box while sparkles twinkle around."""
+    cat = {k: QColor(v) for k, v in CAT[mode].items()}
+    box = theme.color(mode, "accent")
+    p.save()
+    scale = min(rect.width() / 40, rect.height() / 34)
+    p.translate(rect.center().x() - 20 * scale, rect.center().y() - 17 * scale)
+    p.scale(scale, scale)
+
+    for i, (x, y, r) in enumerate(((4.5, 10, 3.4), (36, 5, 2.8), (35.5, 15, 2.1))):
+        k = (math.sin(t * 3 - i * 2.1) + 1) / 2  # each one twinkles in turn
+        if k > 0.15:
+            color = QColor(box)
+            color.setAlphaF(0.35 + 0.65 * k)
+            _sparkle(p, QPointF(x, y), r * (0.5 + 0.5 * k), color)
+
+    p.translate(0, -abs(math.sin(t * 3.4)) * 2.4)  # hop, hop
+
+    swish = math.sin(t * 3.2) * 3
+    tail = QPainterPath(QPointF(29, 25))
+    tail.cubicTo(QPointF(35, 25), QPointF(37 + swish * 0.3, 19), QPointF(35 + swish, 13))
+    p.setPen(QPen(cat["line"], 3.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+    p.setPen(QPen(cat["fur"], 1.8, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+
+    # The head peeks over the box, so the box is drawn after it.
+    p.save()
+    p.translate(20, 13)
+    p.rotate(math.sin(t * 2.4) * 6)
+    _happy_head(p, cat, t)
     p.restore()
 
     line = QPen(cat["line"], 1.4)
@@ -354,15 +359,169 @@ def paint_update_cat(p: QPainter, rect: QRectF, t: float, mode: str) -> None:
     p.restore()
 
 
+def paint_transfer_cat(p: QPainter, rect: QRectF, t: float, mode: str, phones: int = 1) -> None:
+    """Send to your phone: the cat takes a file off the computer, hops it over to the phone (which
+    sparkles as it lands) and hops back for the next one. With several devices downloading, up to
+    three phones stand in a row (more get a "+N") and each trip's file goes to the next in turn."""
+    cat = {k: QColor(v) for k, v in CAT[mode].items()}
+    accent = theme.color(mode, "accent")
+    screen = theme.color(mode, "chip")
+    line = QPen(cat["line"], 1.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+    shown = max(1, min(phones, 3))
+    width = 100 + 13.5 * (shown - 1)  # the scene grows a little to the right for each extra phone
+    p.save()
+    scale = min(rect.width() / width, rect.height() / 60)
+    p.translate(rect.center().x() - width / 2 * scale, rect.center().y() - 30 * scale)
+    p.scale(scale, scale)
+
+    trip = (t % 2.6) / 2.6  # one file per trip: there with it, then back for another
+    landed = 0.5 < trip < 0.72  # the phone's little celebration
+    target = int(t // 2.6) % shown  # whose turn it is
+    phone_w = 13 if shown == 1 else 11.5
+    phone_x = [84 + 13.5 * i for i in range(shown)]
+    aim = QPointF(phone_x[target] + phone_w / 2, 28)
+
+    # The computer, with a file waiting on its screen while the cat is away.
+    p.setPen(line)
+    p.setBrush(screen)
+    p.drawRoundedRect(QRectF(2, 18, 26, 19), 3, 3)
+    p.drawLine(QPointF(15, 37), QPointF(15, 42))
+    p.drawLine(QPointF(9, 43), QPointF(21, 43))
+    if trip > 0.62 or trip < 0.06:
+        _file(p, QPointF(15, 27.5), 0.75, accent, cat["line"])
+
+    # The phones, the one getting a file glowing for a moment as it lands.
+    for i, px in enumerate(phone_x):
+        p.setPen(line)
+        p.setBrush(screen)
+        p.drawRoundedRect(QRectF(px, 16, phone_w, 25), 3, 3)
+        if i == target and landed:
+            glow = QColor(accent)
+            glow.setAlphaF(0.45 * math.sin((trip - 0.5) / 0.22 * math.pi))
+            p.setPen(Qt.NoPen)
+            p.setBrush(glow)
+            p.drawRoundedRect(QRectF(px + 1.5, 18.5, phone_w - 3, 19), 2, 2)
+            p.setPen(line)
+        p.drawLine(QPointF(px + phone_w / 2 - 1.5, 38.6), QPointF(px + phone_w / 2 + 1.5, 38.6))
+    if phones > shown:  # "+2" over the last phone: more devices than fit
+        p.setPen(cat["line"])
+        font = p.font()
+        font.setPixelSize(7)
+        font.setBold(True)
+        p.setFont(font)
+        p.drawText(QRectF(phone_x[-1] - 4, 4, phone_w + 8, 10), Qt.AlignCenter, f"+{phones - shown}")
+    if landed:
+        k = math.sin((trip - 0.5) / 0.22 * math.pi)
+        sparkle = QColor(accent)
+        sparkle.setAlphaF(k)
+        _sparkle(p, QPointF(aim.x() + 6.5, 12), 2.6 * k, sparkle)
+        _sparkle(p, QPointF(aim.x() - 9.5, 11), 1.8 * k, sparkle)
+
+    # Where the cat is: over to the phone with the file, a pause, then back.
+    if trip < 0.06:
+        x, carrying, going = 38.0, True, True  # picking it up
+    elif trip < 0.44:
+        x, carrying, going = 38 + 33 * _ease((trip - 0.06) / 0.38), True, True
+    elif trip < 0.56:
+        x, carrying, going = 71.0, trip < 0.5, True  # handing it over
+    else:
+        x, carrying, going = 71 - 33 * _ease((trip - 0.56) / 0.44), False, False
+    walking = 0.06 < trip < 0.44 or trip > 0.56
+    hop = abs(math.sin(t * 9)) * 2.2 if walking else 0
+
+    p.save()
+    p.translate(x, -hop)
+    if walking:  # leaning into each hop, from its feet
+        p.translate(0, 49)
+        p.rotate(4 if going else -4)
+        p.translate(0, -49)
+
+    # Tail behind, swishing the other way from where it's headed.
+    swish = math.sin(t * 6) * 2.5
+    side = -1 if going else 1
+    tail = QPainterPath(QPointF(side * 5, 46))
+    tail.cubicTo(QPointF(side * 11, 46), QPointF(side * (12 + swish * 0.3), 40), QPointF(side * 10 + swish, 35))
+    p.setBrush(Qt.NoBrush)  # or the open curve gets filled with whatever was used last
+    p.setPen(QPen(cat["line"], 3.2, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+    p.setPen(QPen(cat["fur"], 1.7, Qt.SolidLine, Qt.RoundCap))
+    p.drawPath(tail)
+
+    # Body and little feet, stepping in turn.
+    p.setPen(line)
+    p.setBrush(cat["fur"])
+    step = math.sin(t * 9) * 1.6 if walking else 0
+    for fx, lift in ((-3.6, step), (3.6, -step)):
+        p.drawEllipse(QRectF(fx - 2.6, 47 - max(lift, 0), 5.2, 3.6))
+    p.drawEllipse(QRectF(-7.5, 34, 15, 14))
+
+    p.save()
+    p.translate(0, 28)
+    p.rotate(math.sin(t * 4.5) * 4)
+    _happy_head(p, cat, t)
+    p.restore()
+
+    # Paws up holding the file over its head, or tucked in on the way back.
+    if carrying:
+        _file(p, QPointF(0, 15), 1, accent, cat["line"])
+        for px in (-5.2, 5.2):
+            p.setPen(line)
+            p.setBrush(cat["fur"])
+            p.drawEllipse(QRectF(px - 2.3, 17.6, 4.6, 3.8))
+    else:  # paws at its sides, swinging with each step
+        for px, swing in ((-7.4, step), (7.4, -step)):
+            p.drawEllipse(QRectF(px - 2, 38.6 + swing * 0.6, 4, 3.4))
+    p.restore()
+
+    # The file flying between the cat and the screens (in front of the cat).
+    if trip < 0.06:
+        k = trip / 0.06
+        _file(p, QPointF(15 + (x - 15) * k, 27.5 + (15 - 27.5) * k), 0.75 + 0.25 * k, accent, cat["line"])
+    elif 0.44 <= trip < 0.5:
+        k = (trip - 0.44) / 0.06
+        _file(p, QPointF(x + (aim.x() - x) * k, 15 - hop + (aim.y() - 15) * k - math.sin(k * math.pi) * 6),
+              1 - 0.6 * k, accent, cat["line"])  # a little arc, so it can reach the farther phones
+
+    p.restore()
+
+
+def _file(p: QPainter, c: QPointF, size: float, color: QColor, line: QColor) -> None:
+    """A little manga file: a page with a folded corner and a few lines of text, centred on c."""
+    if size <= 0.05:
+        return
+    w, h, fold = 9 * size, 11 * size, 3 * size
+    x, y = c.x() - w / 2, c.y() - h / 2
+    page = QPainterPath(QPointF(x, y))
+    page.lineTo(QPointF(x + w - fold, y))
+    page.lineTo(QPointF(x + w, y + fold))
+    page.lineTo(QPointF(x + w, y + h))
+    page.lineTo(QPointF(x, y + h))
+    page.closeSubpath()
+    p.setPen(QPen(line, 1.1 * size, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.setBrush(color)
+    p.drawPath(page)
+    p.setPen(QPen(QColor("#ffffff"), 1.1 * size, Qt.SolidLine, Qt.RoundCap))
+    for i in range(3):
+        ly = y + h * (0.42 + 0.18 * i)
+        p.drawLine(QPointF(x + w * 0.22, ly), QPointF(x + w * (0.78 if i < 2 else 0.55), ly))
+
+
+def _ease(k: float) -> float:
+    """Slow out, quick middle, slow in: how a little cat sets off and arrives."""
+    return 0.5 - math.cos(min(max(k, 0), 1) * math.pi) / 2
+
+
 class MiniCat(QWidget):
     """A tiny cat "please wait". start() shows and animates it, stop() hides it.
-    `painter` picks which cat: the peeking head by default, or paint_update_cat."""
+    `painter` picks which cat: the peeking head by default, paint_update_cat or paint_transfer_cat;
+    anything in `options` is passed on to it (paint_transfer_cat's `phones`)."""
 
     def __init__(self, mode: Callable[[], str], size: tuple[int, int] = (40, 24), parent: QWidget | None = None,
                  painter: Callable[[QPainter, QRectF, float, str], None] = paint_mini_cat):
         super().__init__(parent)
         self._mode = mode
         self._painter = painter
+        self.options: dict = {}
         self.setFixedSize(*size)
         self._t0 = time.monotonic()
         self._timer = QTimer(self, interval=33)
@@ -382,5 +541,5 @@ class MiniCat(QWidget):
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        self._painter(p, QRectF(self.rect()), time.monotonic() - self._t0, self._mode())
+        self._painter(p, QRectF(self.rect()), time.monotonic() - self._t0, self._mode(), **self.options)
         p.end()

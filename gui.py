@@ -35,7 +35,7 @@ import phone
 import theme
 import updater
 from history import History, ago, chapter_key
-from loader import CatLoader, MiniCat, paint_mini_cat, paint_update_cat
+from loader import CatLoader, MiniCat, paint_mini_cat, paint_transfer_cat, paint_update_cat
 from builders import FORMATS
 from version import __version__
 
@@ -2888,9 +2888,10 @@ class SendToPhone(QDialog):
         right = QVBoxLayout()
         right.setSpacing(6)
         mode = lambda: CURRENT["mode"]
-        self.cat = CatLoader(mode, (90, 72))
-        self.happy = CatLoader(mode, (90, 72), celebrate=True)
-        for cat in (self.cat, self.happy):
+        self.cat = CatLoader(mode, (108, 86))  # waiting
+        self.happy = CatLoader(mode, (108, 86), celebrate=True)  # everything sent
+        self.moving = MiniCat(mode, (180, 86), painter=paint_transfer_cat)  # files on their way (same height, so nothing jumps)
+        for cat in (self.cat, self.happy, self.moving):
             right.addWidget(cat, 0, Qt.AlignHCenter)
         qr_card = QFrame(objectName="qrCard")
         qr_box = QVBoxLayout(qr_card)
@@ -2974,7 +2975,7 @@ class SendToPhone(QDialog):
 
     def _toggle(self, i: int, on: bool) -> None:
         (self.share.allowed.add if on else self.share.allowed.discard)(i)
-        self._celebrate()
+        self._mood()
 
     def _tick_all(self, on: bool) -> None:
         for row in self.rows:
@@ -3021,7 +3022,7 @@ class SendToPhone(QDialog):
                 self.settings.sent_to_phone = True
                 self.settings.save()
         self._show_row(i)
-        self._celebrate()
+        self._mood()
 
     def _show_row(self, i: int) -> None:
         """Sent once any device has it (hover says which); else the furthest download; else the size."""
@@ -3048,17 +3049,20 @@ class SendToPhone(QDialog):
         self.connected.setToolTip(self._names(self.devices) if more else "")
         self.connected.show()
 
-    def _celebrate(self) -> None:
-        """Once every ticked file has gone to a phone, the cat cheers."""
+    def _mood(self) -> None:
+        """The cat carries files across while any are on their way, cheers once every ticked file
+        has reached a phone, and reads while it waits."""
+        moving = any(self.going.values())
+        self.moving.options = {"phones": len({d for going in self.going.values() for d in going})}  # one phone each
         done = bool(self.share.allowed) and all(self.sent.get(i) for i in self.share.allowed)
-        if done and not self.happy.isVisible():
-            self.cat.stop()
-            self.happy.start()
-            self.sub.setText("All on your phone! ♥")
-        elif not done and self.happy.isVisible():
-            self.happy.stop()
-            self.cat.start()
-            self.sub.setText("Pick the files, then scan the code with your phone's camera")
+        show = self.moving if moving else self.happy if done else self.cat
+        for cat in (self.cat, self.happy, self.moving):
+            if cat is show and not cat.isVisible():
+                cat.start()
+            elif cat is not show and cat.isVisible():
+                cat.stop()
+        self.sub.setText("Carrying files to your phone ✦" if moving else "All on your phone! ♥" if done
+                         else "Pick the files, then scan the code with your phone's camera")
 
 
 class MascotLogo(QWidget):
