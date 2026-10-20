@@ -667,6 +667,7 @@ def group_keys(group: core.Group) -> list[str]:
 
 class DownloadPage(QWidget):
     completed = Signal(str, int, str)  # title, number of files, folder
+    progress = Signal(str, float)  # history key, how far the download is (0 to 1), or -1 once it stops
     COVER_WIDTHS = (150, 280)  # the open title's cover grows with the window between these
 
     def __init__(self, settings: Settings, history: History):
@@ -1928,6 +1929,7 @@ class DownloadPage(QWidget):
         self.phone_btn.hide()
         self.bar_cat.start()
         self.overall.setValue(0)
+        self.progress.emit(self.key, 0.0)
         for i in rows:  # other rows keep showing what is already downloaded
             bar = self._bar(i)
             bar.setValue(0)
@@ -1990,6 +1992,7 @@ class DownloadPage(QWidget):
         elif state == core.FAILED:
             self.history.file_failed(self.key, group_keys(self.groups[row]))
         self.overall.setValue(int(self._overall() * 1000))
+        self.progress.emit(self.key, self._overall())
 
     def _overall(self) -> float:
         return sum(self.fractions.values()) / len(self.fractions) if self.fractions else 0.0
@@ -2016,6 +2019,7 @@ class DownloadPage(QWidget):
 
     def _on_finished(self, failed: list[int], cancelled: bool) -> None:
         self.running = False
+        self.progress.emit(self.key, -1.0)
         self.tick.stop()
         self.bar_cat.stop()
         self._set_locked(False)
@@ -2310,6 +2314,7 @@ class LibraryPage(QWidget):
         self.settings = settings
         self.history = history
         self.busy = lambda key: False  # is this manga downloading right now? (set by MainWindow)
+        self.downloading: dict[str, float] = {}  # key -> how far its download is, while one runs
         self.cards: dict[str, dict] = {}
         self.checking = False
         self.bridge = LibraryBridge()
@@ -2391,6 +2396,9 @@ class LibraryPage(QWidget):
         badge = label("", "newBadge")
         badge.hide()
         top.addWidget(badge)
+        busy = label("Downloading ✦", "newBadge")
+        busy.hide()
+        top.addWidget(busy)
         cat = MiniCat(lambda: CURRENT["mode"])
         top.addWidget(cat)
         top.addStretch(1)
@@ -2413,16 +2421,19 @@ class LibraryPage(QWidget):
         buttons.addStretch(1)
         pending, failed = entry.get("pending", []), entry.get("failed", [])
         url = entry.get("url", "")
+        resume = []  # Continue and Retry: off while this manga is downloading
         if pending:
             go = set_icon(QPushButton(" Continue", objectName="primary"), "download", "white")
             go.setToolTip(f"Download the {len(pending)} chapters that didn't finish last time")
             go.clicked.connect(lambda: self.open_requested.emit(url, "continue"))
             buttons.addWidget(go)
+            resume.append(go)
         if failed:
             retry = set_icon(QPushButton(" Retry failed"), "refresh")
             retry.setToolTip(f"Try the {len(failed)} chapters that failed again")
             retry.clicked.connect(lambda: self.open_requested.emit(url, "retry"))
             buttons.addWidget(retry)
+            resume.append(retry)
         folder = self._folder(entry)
         folder_btn = set_icon(QPushButton(" Folder"), "folder")
         folder_btn.setEnabled(folder is not None)
@@ -2443,7 +2454,8 @@ class LibraryPage(QWidget):
         row.addLayout(col, 1)
         layout.addLayout(row)
 
-        self.cards[key] = {"bar": bar, "meta": meta, "when": when, "badge": badge, "cat": cat}
+        self.cards[key] = {"bar": bar, "meta": meta, "when": when, "badge": badge, "cat": cat, "busy": busy,
+                           "resume": resume}
         self._fill(key)
         return frame
 
@@ -2489,11 +2501,40 @@ class LibraryPage(QWidget):
         new = entry.get("new_chapters", 0)
         w["badge"].setText(f"{new} new ✦")
         w["badge"].setVisible(bool(new))
+        self._show_downloading(key)
+
+    def show_progress(self, key: str, frac: float) -> None:
+        """From the Download page: how far this manga's download is, or -1 once it has stopped."""
+        if frac < 0:
+            self.downloading.pop(key, None)
+            if key in self.cards:
+                self.refresh()  # new totals, and Continue or Retry may have come or gone
+            return
+        self.downloading[key] = frac
+        self._show_downloading(key)
+
+    def _show_downloading(self, key: str) -> None:
+        """While a manga downloads, its card says so: a chip and the cat by the title, the bar
+        following this download, and Continue and Retry resting until it's done."""
+        w = self.cards.get(key)
+        if not w:
+            return
+        frac = self.downloading.get(key)
+        on = frac is not None
+        w["busy"].setVisible(on)
+        if on:
+            w["cat"].start()
+            w["bar"].setValue(int(frac * 1000))
+            w["bar"].setFormat(f"Downloading… {frac * 100:.0f}%")
+        for b in w["resume"]:
+            b.setEnabled(not on)
+            if on:
+                b.setToolTip("Downloading right now ✦")
 
     def _set_checking(self, key: str, on: bool) -> None:
         cat = self.cards.get(key, {}).get("cat")
         if cat:
-            cat.start() if on else cat.stop()
+            cat.start() if on or key in self.downloading else cat.stop()  # a download keeps it going
 
     def _check_for_new(self, entries: list[tuple[str, dict]]) -> None:
         # Skip titles checked in the last few minutes, so flipping between pages doesn't hammer the site.
@@ -3250,6 +3291,7 @@ class MainWindow(QWidget):
         self.download = DownloadPage(self.settings, self.history)
         self.library = LibraryPage(self.settings, self.history)
         self.library.busy = lambda key: self.download.running and self.download.key == key
+        self.download.progress.connect(self.library.show_progress)
         self.library.open_requested.connect(self._open_from_library)
         self.settings_page = SettingsPage(self.settings)
         self.settings_page.changed.connect(self._settings_saved)
