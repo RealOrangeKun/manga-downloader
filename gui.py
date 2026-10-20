@@ -280,6 +280,7 @@ def fmt_duration(seconds: float, about: bool = True) -> str:
 
 def folder_row(edit: QLineEdit, title: str) -> QHBoxLayout:
     row = QHBoxLayout()
+    row.setSpacing(10)  # a little room between the box and Browse
     row.addWidget(edit, 1)
     browse = set_icon(QPushButton(" Browse"), "folder")
 
