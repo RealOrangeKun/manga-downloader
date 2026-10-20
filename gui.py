@@ -2895,6 +2895,7 @@ class MainWindow(QWidget):
         QApplication.instance().installEventFilter(self.wheel_guard)
         self.round_popups = RoundPopups(self)
         QApplication.instance().installEventFilter(self.round_popups)
+        QApplication.instance().aboutToQuit.connect(self._remove_filters)  # or they see half-deleted widgets at exit
         self.setWindowTitle("Nyanga")
         self.setWindowIcon(theme.app_icon())
         self.resize(1120, 840)
@@ -3008,6 +3009,11 @@ class MainWindow(QWidget):
             hints.colorSchemeChanged.connect(lambda *_: self.apply_theme(self.settings.theme))
         self.apply_theme(self.settings.theme)
         QTimer.singleShot(500, lambda: self._greet_update(had_data))
+
+    def _remove_filters(self) -> None:
+        app = QApplication.instance()
+        app.removeEventFilter(self.wheel_guard)
+        app.removeEventFilter(self.round_popups)
 
     def _greet_update(self, had_data: bool) -> None:
         """After an update, shows once what changed since the version last opened."""
