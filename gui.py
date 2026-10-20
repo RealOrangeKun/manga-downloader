@@ -682,6 +682,8 @@ class DownloadPage(QWidget):
         self.search_site = None
         self.search_query = ""
         self.search_filters = core.SearchFilters()
+        self.search_sort = ""  # one of the site's `sorts`, "" for its own order
+        self.search_resort: str | None = None  # the order showing while another one is fetched
         self.search_pages: dict[int, list] = {}  # results page -> SearchResults, fetched so far
         self.search_page = 1
         self.search_total = 1
@@ -780,6 +782,10 @@ class DownloadPage(QWidget):
         self.size_box.setToolTip("How big the covers are")
         self.size_box.currentIndexChanged.connect(lambda i: self._set_results_look(size=i))
         rhead.addWidget(self.size_box)
+        self.sort_box = combo_box()
+        self.sort_box.setToolTip("Sort by")
+        self.sort_box.currentIndexChanged.connect(self._resort)
+        rhead.addWidget(self.sort_box)
         rhead.addStretch(1)
         self.results_dots = MiniCat(lambda: CURRENT["mode"])
         rhead.addWidget(self.results_dots)
@@ -1086,24 +1092,50 @@ class DownloadPage(QWidget):
             return
         self.search_id += 1
         self.search_site, self.search_query, self.search_filters = site_cls, text, filters
+        self._sort_options(site_cls)
         self.search_pages, self.search_page, self.search_total, self.search_loading = {}, 1, 1, 0
+        self.search_resort = None
         self._hint(f"Searching {site_cls.name}…")
         self._start_lookup("Searching…" if text else "Browsing…", f"Asking {site_cls.name} for matches ✧")
         self._search_page(1)
 
     def _search_page(self, page: int) -> None:
         sid, site_cls, query, filters = self.search_id, self.search_site, self.search_query, self.search_filters
+        extra = {"sort": self.search_sort} if self.search_sort else {}
         limiter = core.RateLimiter(self.settings.request_delay)
 
         def work() -> None:
             try:
-                results, pages = site_cls.search(query, limiter, page, filters) if filters \
-                    else site_cls.search(query, limiter, page)
+                results, pages = site_cls.search(query, limiter, page, filters, **extra) if filters \
+                    else site_cls.search(query, limiter, page, **extra)
                 self.bridge.searched.emit(sid, site_cls, query, page, results, pages)
             except Exception as e:
                 self.bridge.search_failed.emit(sid, str(e))
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _sort_options(self, site_cls) -> None:
+        """Offer the site's sort orders, keeping the chosen one if it has it too."""
+        sorts = getattr(site_cls, "sorts", [])
+        self.sort_box.blockSignals(True)
+        self.sort_box.clear()
+        self.sort_box.addItems(sorts)
+        self.sort_box.setCurrentIndex(max(0, self.sort_box.findText(self.search_sort)))
+        self.sort_box.blockSignals(False)
+        self.sort_box.setVisible(bool(sorts))
+        self.search_sort = self.sort_box.currentText() if self.sort_box.currentIndex() > 0 else ""
+
+    def _resort(self, index: int) -> None:
+        """Search again in the new order, from page 1, keeping these results up until the new ones come."""
+        sort = self.sort_box.itemText(index) if index > 0 else ""
+        if sort == self.search_sort or not self.search_pages:
+            return
+        self.search_id += 1
+        self.search_sort, self.search_resort = sort, self.search_sort
+        self.search_loading = 1
+        self._results_waiting(True)
+        self.results_wait.setText("sorting ✧")
+        self._search_page(1)
 
     def _goto_results(self, page: int) -> None:
         if not 1 <= page <= self.search_total or self.search_loading:
@@ -1113,6 +1145,7 @@ class DownloadPage(QWidget):
             return
         self.search_loading = page  # fetch it from the site first
         self._results_waiting(True)
+        self.results_wait.setText("fetching more ✧")
         self._search_page(page)
 
     def _results_waiting(self, on: bool) -> None:
@@ -1125,9 +1158,14 @@ class DownloadPage(QWidget):
     def _on_search_failed(self, sid: int, message: str) -> None:
         if sid != self.search_id:
             return
-        if self.search_loading:  # a later page; keep showing this one
+        if self.search_loading:  # a later page or another order; keep showing this one
             self.search_loading = 0
             self._results_waiting(False)
+            if self.search_resort is not None:  # put the sort back to what's showing
+                self.search_sort, self.search_resort = self.search_resort, None
+                self.sort_box.blockSignals(True)
+                self.sort_box.setCurrentIndex(max(0, self.sort_box.findText(self.search_sort)))
+                self.sort_box.blockSignals(False)
             self._hint(f"Couldn't get more results: {message}", error=True)
         else:
             self._on_fetch_failed(message)
@@ -1135,6 +1173,16 @@ class DownloadPage(QWidget):
     def _on_searched(self, sid: int, site_cls, query: str, page: int, results: list, pages: int) -> None:
         if sid != self.search_id:
             return
+        if self.search_resort is not None:  # a new order: start the pages over
+            self.search_resort = None
+            self.search_pages, self.search_page = {}, 1
+            if not results:
+                self.search_loading = 0
+                self._results_waiting(False)
+                self._clear_results()
+                self.results_card.hide()
+                self._hint(f"{site_cls.name} didn't send anything back in that order. Try another ✧", error=True)
+                return
         fresh = not self.search_pages
         if fresh:
             self._end_lookup()

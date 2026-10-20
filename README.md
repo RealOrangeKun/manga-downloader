@@ -44,7 +44,7 @@
 
 - 🔎 **Search by name**: type a title, pick it from the results, and its cover, genres, story and
   every chapter show up, with the size of each file. Show the results as a list or a grid of covers,
-  from small to very large; each result shows its rating and genres, and hovering it shows what it's about.
+  from small to very large, and sort them by best match, A to Z or newest; each result shows its rating and genres, and hovering it shows what it's about.
 - 🎀 **Filters**: narrow a search down by genre (ones you want, ones you don't), kind (manga,
   manhwa, manhua…), ongoing or finished, and rating. Leave the name empty to browse everything
   that fits.
@@ -142,7 +142,7 @@ closed, that spot shows the delivery cat and how far along it is:
    for ones you want, twice to leave them out), kind, ongoing or finished, and rating; with filters
    on, the name can stay empty to browse. Click the right one in the
    results (use ‹ › under them for more, and the buttons next to **Pick one** to switch between a
-   list and a grid of covers and pick their size); its cover, title, genres, description
+   list and a grid of covers, pick their size, or sort them); its cover, title, genres, description
    (**Read more** for all of it) and chapter count appear.
    **Back to results** lets you pick another. Pasting a title link instead of a name works too.
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
@@ -238,7 +238,7 @@ After the first time, only the last line is needed.
   the exe).
 - To add a site, write a class like `FanFox` in `core.py` with `name`, `home`, `url_re`, `search()`, `info()`,
   `page_urls()` and `image()`, and add it to `SITES`. For filters, give it `genres` and `kinds`
-  lists and let `search()` take a `SearchFilters`; `about()` adds ratings and genres to its search results. It then shows up as a source to search.
+  lists and let `search()` take a `SearchFilters`; a `sorts` list and a `sort` argument add sorting; `about()` adds ratings and genres to its search results. It then shows up as a source to search.
 - Commit messages are [conventional commits](https://www.conventionalcommits.org) (`fix:`,
   `feat:`, `docs:`...). They decide the next version and become the release notes; the subject and body also show
   up in the app's What's new window, so write them for someone who's never seen the code.

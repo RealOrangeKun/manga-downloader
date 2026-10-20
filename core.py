@@ -143,6 +143,8 @@ class FanFox:
               "Adult", "Yuri", "Mecha", "Lolicon", "Shotacon"]  # in the site's id order, starting at 1
     kinds = ["Japanese Manga", "Korean Manhwa", "Chinese Manhua", "European Manga", "American Manga",
              "HongKong Manga", "Other Manga"]
+    sorts = ["Best match", "A to Z", "Newest"]  # the first is the site's own order
+    _sort_ids = {"A to Z": 1, "Newest": 2}  # its 3 (rating) only goes lowest first, 4 isn't popularity
     _user_agent = ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/129.0 Mobile Safari/537.36")
 
@@ -233,11 +235,13 @@ class FanFox:
 
     @classmethod
     def search(cls, query: str, limiter: RateLimiter, page_no: int = 1,
-               filters: SearchFilters | None = None) -> tuple[list[SearchResult], int]:
+               filters: SearchFilters | None = None, sort: str = "") -> tuple[list[SearchResult], int]:
         """One page of titles matching a name (closest matches first on page 1), and how many pages there are.
-        With filters the name may be empty, to browse everything that fits them."""
+        With filters the name may be empty, to browse everything that fits them. `sort` is one of `sorts`."""
         site = cls("", limiter)
         params = {"title": query.strip(), "page": page_no}
+        if sort in cls._sort_ids:
+            params["sort"] = cls._sort_ids[sort]
         if filters:
             ids = lambda names: ",".join(str(cls.genres.index(g) + 1) for g in names if g in cls.genres)
             params.update(stype=1, genres=ids(filters.genres), nogenres=ids(filters.without),
@@ -262,7 +266,7 @@ class FanFox:
                 author=html.unescape(author.group(1)).strip() if author else "",
             ))
         # The site's own order puts spin-offs before the title itself; exact and prefix matches go first.
-        if page_no == 1 and query.strip():
+        if page_no == 1 and query.strip() and "sort" not in params:
             wanted = query.strip().lower()
             results.sort(key=lambda r: (r.title.lower() != wanted, not r.title.lower().startswith(wanted)))
         return results, pages if results else page_no
