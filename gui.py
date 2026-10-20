@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import getpass
 import html
 import json
@@ -2895,7 +2896,7 @@ class MainWindow(QWidget):
         QApplication.instance().installEventFilter(self.wheel_guard)
         self.round_popups = RoundPopups(self)
         QApplication.instance().installEventFilter(self.round_popups)
-        QApplication.instance().aboutToQuit.connect(self._remove_filters)  # or they see half-deleted widgets at exit
+        atexit.register(self._remove_filters)  # before Qt's own exit cleanup, or they see half-deleted widgets
         self.setWindowTitle("Nyanga")
         self.setWindowIcon(theme.app_icon())
         self.resize(1120, 840)
@@ -3012,8 +3013,11 @@ class MainWindow(QWidget):
 
     def _remove_filters(self) -> None:
         app = QApplication.instance()
-        app.removeEventFilter(self.wheel_guard)
-        app.removeEventFilter(self.round_popups)
+        for f in (self.wheel_guard, self.round_popups):
+            try:
+                app.removeEventFilter(f)
+            except RuntimeError:  # this window is already gone, and its filters with it
+                pass
 
     def _greet_update(self, had_data: bool) -> None:
         """After an update, shows once what changed since the version last opened."""
