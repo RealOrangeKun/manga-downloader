@@ -2,6 +2,12 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.9.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.9.0) (2026-10-20)
+
+### New
+- search: search results can now be sorted A to Z or newest first
+- the little stars and hearts in the app are now filled in
+
 ## [1.8.3](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.8.3) (2026-10-18)
 
 ### Fixes
