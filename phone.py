@@ -263,6 +263,12 @@ class _Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             return
         prefix = f"/{share.token}/"
+        if self.path.split("?")[0] == prefix[:-1]:  # typed from the app without the last slash
+            self.send_response(301)
+            self.send_header("Location", prefix)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if not self.path.startswith(prefix):
             return self._send(404, b"Not here", "text/plain")
         share.touch()
