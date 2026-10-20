@@ -2,6 +2,12 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.11.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.11.1) (2026-10-20)
+
+### Fixes
+- two windows sending to phones at once no longer get in each other's way
+- typing the send to phone address by hand no longer shows "Not here"
+
 ## [1.11.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.11.0) (2026-10-20)
 
 ### New
