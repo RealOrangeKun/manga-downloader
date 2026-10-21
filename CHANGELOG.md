@@ -2,6 +2,18 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.12.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.12.0) (2026-10-21)
+
+### New
+- your phone can now save all the files one after another, as separate files
+- on older iPhones and iPads each file now opens in its own tab
+- Linux now has .deb and .rpm packages that update themselves
+
+### Fixes
+- Send to your phone keeps working when a file is deleted while sharing
+- progress bars are round from the very start instead of square
+- Send to phone now lives only on the Library cards
+
 ## [1.11.1](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.11.1) (2026-10-20)
 
 ### Fixes
