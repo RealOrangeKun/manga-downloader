@@ -157,6 +157,7 @@ class Share:
         self.allowed: set[int] = set(range(len(files)))
         self.devices: dict[str, str] = {}  # cookie -> "iPhone", "Android phone 2"...
         self.sent: dict[str, set[int]] = {}  # per device: files sent in full, shown as saved on that phone
+        self.going: dict[str, set[int]] = {}  # per device: files on their way to it right now
         self.lock = threading.Lock()
         # (kind, file index, bytes sent, file size, device name): kind is "visit", "progress", "done"
         # or "cancelled"; a visit has index -1
@@ -216,7 +217,8 @@ class Share:
         return [i for i in sorted(self.allowed) if i < len(self.files) and self.files[i].exists()]
 
     def state(self, device: str) -> dict:
-        return {"allowed": self.available(), "sent": sorted(self.sent.get(device, ()))}
+        return {"allowed": self.available(), "sent": sorted(self.sent.get(device, ())),
+                "going": sorted(self.going.get(device, ()))}
 
     def finished(self, i: int, device: str) -> None:
         with self.lock:
@@ -355,6 +357,16 @@ class _Handler(BaseHTTPRequestHandler):
         share, path = self.share, self.share.files[i]
         total = size_of(path)
         self.sending = i
+        with share.lock:  # the page's "save all as separate files" waits for this one before the next
+            share.going.setdefault(self.device, set()).add(i)
+        try:
+            self._send_file(i, path, total)
+        finally:
+            with share.lock:
+                share.going.get(self.device, set()).discard(i)
+
+    def _send_file(self, i: int, path: Path, total: int) -> None:
+        share = self.share
         if path.is_dir():
             self._attachment(download_name(path), TYPES[".zip"], zip_size([path]))
             out = _Writer(self.wfile)
@@ -423,6 +435,7 @@ h1 { color: $accent; }
 .file { background: $card; border-color: $border; }
 .nocover, .file img { background: $button; color: $accent; }
 .file.saved .save, .pager button { background: $button; color: $accent; }
+.each { background: $card; color: $accent; border-color: $border; }
 """)
 
 _STYLE = """
@@ -452,6 +465,8 @@ h1 { font-size: 26px; font-weight: 600; margin: 4px 0 2px; }
         background-image: linear-gradient(90deg, #ff7eb3, #ff5c9a); color: #fff; font-weight: 600;
         border-radius: 14px; padding: 10px 18px; -webkit-flex: none; flex: none; text-decoration: none; }
 .all { display: block; text-align: center; margin: 0 0 8px; padding: 14px; font-size: 17px; }
+.each { display: block; width: 100%; margin: 0 0 8px; padding: 12px; font-family: inherit; font-size: 16px;
+        font-weight: 600; border: 2px solid; border-radius: 14px; -webkit-appearance: none; }
 .count { text-align: center; font-size: 15px; margin: 0 0 16px; min-height: 1em; }
 .pager { text-align: center; margin: 6px 0 4px; }
 .pager button { font-family: inherit; font-size: 22px; font-weight: 600; width: 46px; height: 46px; border: 0;
@@ -474,6 +489,7 @@ PAGE = """<!doctype html>
 <body><main>
 <header>""" + _CAT + """<h1>Nyanga ✦</h1><p class="sub">$title</p></header>
 <a class="all" id="all" href="all.zip" download hidden>Save all as one zip</a>
+<button class="each" id="each" hidden>Save all as separate files</button>
 <p class="count" id="count"></p>
 <div id="list">
 $cards
@@ -489,6 +505,8 @@ $tips
 var PER = 10;  // files per page
 var state = $state, page = 0, misses = 0;
 var cards = Array.prototype.slice.call(document.querySelectorAll(".file"));
+var canSave = "download" in document.createElement("a");  // before iOS 13 each file would open instead
+var queue = null, current = -1, started = 0, done = 0, total = 0;  // "save all as separate files"
 
 function el(id) { return document.getElementById(id); }
 function num(a) { return parseInt(a.getAttribute("data-i"), 10); }
@@ -515,8 +533,58 @@ function show() {
   el("next").disabled = page >= pages - 1;
   el("all").hidden = shown.length < 2;
   el("all").textContent = "Save all " + shown.length + " as one zip";
+  var rest = unsaved(shown).length;
+  if (queue) {
+    el("each").hidden = false;
+    el("each").textContent = "Saving " + Math.min(done + 1, total) + " of " + total + "… tap to stop";
+  } else {
+    el("each").hidden = !canSave || shown.length < 2 || !rest;
+    el("each").textContent = rest === shown.length ? "Save all " + rest + " as separate files"
+                                                   : "Save the other " + rest + " as separate files";
+  }
   el("count").textContent = !saved ? "" : saved === shown.length ? "All saved ♥" : saved + " of " + shown.length + " saved ✦";
 }
+
+function unsaved(shown) {
+  var out = [], i;
+  for (i = 0; i < shown.length; i++) if (!has(state.sent, num(shown[i]))) out.push(num(shown[i]));
+  return out;  // in list order
+}
+
+// Save the files one at a time, in order: the next starts once the computer has sent this one.
+// One the phone never starts (its "Download?" was declined) is skipped after 10 seconds.
+function startNext() {
+  while (queue && queue.length && !has(state.allowed, queue[0])) { queue.shift(); done++; }  // unticked or deleted
+  if (!queue || !queue.length) { queue = null; show(); return; }
+  current = queue[0];
+  started = new Date().getTime();
+  var a = document.createElement("a");
+  a.href = "f/" + current;
+  a.setAttribute("download", "");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  show();
+}
+
+function advance() {
+  if (!queue) return;
+  var waited = new Date().getTime() - started;
+  if (has(state.sent, current) || (!has(state.going || [], current) && waited > 10000)) {
+    queue.shift();
+    done++;
+    startNext();
+  }
+}
+
+el("each").onclick = function () {
+  if (queue) { queue = null; show(); return; }  // stop: the file on its way still finishes
+  var shown = cards.filter(function (a) { return has(state.allowed, num(a)); });
+  queue = unsaved(shown);
+  done = 0;
+  total = queue.length;
+  startNext();
+};
 
 function turn(by) {
   page += by;
@@ -538,6 +606,7 @@ function check() {
       misses = 0;
       document.body.className = "";
       show();
+      advance();
     } catch (e) {
       if (++misses >= 2) document.body.className = "stopped";
     }
@@ -549,7 +618,10 @@ function check() {
 // Before iOS 13, Safari can't save files: it opens them and offers apps to open them with.
 el("old").hidden = "download" in document.createElement("a");
 show();
-setInterval(check, 2500);
+(function loop() {  // checks more often while saving one by one, so the next file starts quickly
+  check();
+  setTimeout(loop, queue ? 1000 : 2500);
+})();
 </script>
 </body></html>"""
 

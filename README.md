@@ -195,7 +195,8 @@ of all chapters on the site), and what failed or is still waiting.
 **Send to your phone**
 
 Tick the files you want and scan the QR code with your phone's camera. A page opens in the
-phone's browser with a **Save** button for each file (and **Save all as one zip**). The phone and
+phone's browser with a **Save** button for each file, **Save all as one zip**, and **Save all as
+separate files** (one after another, in order). The phone and
 computer need to be on the same Wi‑Fi; nothing goes through the internet.
 
 - The first time on Windows, it may ask whether Nyanga can use the network: press **Allow**.
