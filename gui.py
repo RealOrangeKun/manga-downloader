@@ -20,7 +20,7 @@ from pathlib import Path
 import requests
 import segno
 from PySide6.QtCore import QBuffer, QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap, QRegion
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
 from PySide6.QtWidgets import (
     QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
@@ -652,6 +652,42 @@ def remove_from_library(parent: QWidget, history: History, key: str, busy: bool 
     return False
 
 
+class RoundBar(QProgressBar):
+    """A progress bar that stays a rounded pill at any size. Qt's stylesheet can't round a fill
+    narrower than its corners, so it drew a square at the start of every download; here the fill is
+    clipped to the rounded track instead. Text colors still come from the stylesheet's states."""
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect())
+        track = QPainterPath()
+        track.addRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+        mode = CURRENT["mode"]
+        p.fillPath(track, theme.color(mode, "track"))
+        span = self.maximum() - self.minimum()
+        frac = (self.value() - self.minimum()) / span if span > 0 else 0
+        if frac > 0:
+            fill = QPainterPath()
+            width = max(rect.width() * frac, 1.0)
+            fill.addRoundedRect(QRectF(rect.left() - rect.height(), rect.top(), width + rect.height(), rect.height()),
+                                rect.height() / 2, rect.height() / 2)  # starts off the left so it grows as a rounded sliver
+            if self.property("state") == "Failed":
+                brush = theme.color(mode, "failed_chunk")
+            else:
+                brush = QLinearGradient(rect.left(), 0, rect.right(), 0)
+                brush.setColorAt(0, theme.color(mode, "chunk_a"))
+                brush.setColorAt(1, theme.color(mode, "chunk_b"))
+            p.setClipPath(track)
+            p.fillPath(fill, brush)
+            p.setClipping(False)
+        if self.isTextVisible() and self.text():
+            p.setPen(self.palette().color(QPalette.WindowText))
+            p.setFont(self.font())
+            p.drawText(rect, Qt.AlignCenter, self.text())
+        p.end()
+
+
 def bar_holder(bar: QProgressBar) -> QWidget:
     """A progress bar with some room around it, for the table's last column."""
     holder = QWidget()
@@ -1017,7 +1053,7 @@ class DownloadPage(QWidget):
         bl.addWidget(self.bar_cat)
         info = QVBoxLayout()
         self.status_lbl = label("Search for a manga to get started ♥", "meta")
-        self.overall = QProgressBar(maximum=1000, textVisible=False)
+        self.overall = RoundBar(maximum=1000, textVisible=False)
         self.overall.setFixedHeight(12)
         status_row = QHBoxLayout()
         status_row.setSpacing(6)
@@ -1554,7 +1590,7 @@ class DownloadPage(QWidget):
             size = QTableWidgetItem()
             size.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.table.setItem(i, 4, size)
-            bar = QProgressBar(maximum=1000, value=0, format="")
+            bar = RoundBar(maximum=1000, value=0, format="")
             bar.setFixedHeight(18)
             self.table.setCellWidget(i, 5, bar_holder(bar))
             self.bars.append(bar)
@@ -2409,7 +2445,7 @@ class LibraryPage(QWidget):
         top.addWidget(forget)
         col.addLayout(top)
 
-        bar = QProgressBar(objectName="libBar", maximum=1000)
+        bar = RoundBar(objectName="libBar", maximum=1000)
         bar.setFixedHeight(18)
         col.addWidget(bar)
         meta = label("", "meta", wrap=True)
@@ -3005,7 +3041,7 @@ class SendToPhone(QDialog):
             size = ""
         size_lbl = label(size, "meta")
         box.addWidget(size_lbl)
-        bar = QProgressBar(maximum=1000, textVisible=False)
+        bar = RoundBar(maximum=1000, textVisible=False)
         bar.setFixedSize(90, 10)
         bar.hide()
         box.addWidget(bar)
