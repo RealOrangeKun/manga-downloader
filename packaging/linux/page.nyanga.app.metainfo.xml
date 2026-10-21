@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What software centers (GNOME Software, KDE Discover) show for the .deb and .rpm. build_packages.sh
+     fills in @VERSION@ and @DATE@. Check it with appstreamcli validate (offline: no-net option). -->
+<component type="desktop-application">
+  <id>page.nyanga.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary=https://github.com/nyanga-app/nyanga-app/blob/main/LICENSE</project_license>
+
+  <name>Nyanga</name>
+  <summary>A cute and cozy app that downloads manga</summary>
+  <developer id="page.nyanga">
+    <name>Youssef Tarek</name>
+  </developer>
+
+  <description>
+    <p>
+      Nyanga downloads manga and saves it as one tidy file per volume, ready for whatever reader
+      you like. Look a title up by name, pick the chapters with a tap, and the cat takes it from there.
+    </p>
+    <ul>
+      <li>One CBZ, PDF or EPUB per volume, or per few chapters when a series has no volumes</li>
+      <li>Downloads a few files at a time, gently, and carries on where it stopped</li>
+      <li>A library of everything you have, with a badge when new chapters come out</li>
+      <li>Send the files to your phone over your home Wi-Fi with a QR code</li>
+      <li>Light and dark mode, and it keeps itself up to date</li>
+    </ul>
+    <p>Works with fanfox.net for now.</p>
+  </description>
+
+  <launchable type="desktop-id">nyanga.desktop</launchable>
+  <provides>
+    <binary>nyanga</binary>
+  </provides>
+
+  <url type="homepage">https://nyanga.page</url>
+  <url type="bugtracker">https://github.com/nyanga-app/nyanga-app/issues</url>
+  <url type="vcs-browser">https://github.com/nyanga-app/nyanga-app</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Looking a manga up and picking the volumes to download</caption>
+      <image>https://raw.githubusercontent.com/nyanga-app/nyanga-app/main/assets/readme/screenshot-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The same in dark mode</caption>
+      <image>https://raw.githubusercontent.com/nyanga-app/nyanga-app/main/assets/readme/screenshot-dark.png</image>
+    </screenshot>
+  </screenshots>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="@VERSION@" date="@DATE@">
+      <url type="details">https://nyanga.page/changelog/</url>
+    </release>
+  </releases>
+</component>

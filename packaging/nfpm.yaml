@@ -9,8 +9,16 @@ release: 1
 section: net
 priority: optional
 maintainer: Youssef Tarek <yousseftarekali04@gmail.com>  # the address already on the public commits
-description: A cute & cozy app that downloads manga as one tidy file per volume.
-vendor: Nyanga
+# The first line is the one-line summary; the rest is the longer text `apt show` / `rpm -qi` print.
+description: |-
+  A cute & cozy app that downloads manga as one tidy file per volume.
+  Nyanga looks manga up by name and saves the chapters you pick as one CBZ, PDF or EPUB
+  per volume (or per few chapters), downloading gently and carrying on where it stopped.
+  It keeps a library of everything you have, can send the files to your phone over Wi-Fi,
+  and keeps itself up to date: updates go into your own folder, so no password is needed.
+rpm:
+  summary: A cute & cozy app that downloads manga as one tidy file per volume.
+vendor: Youssef Tarek
 homepage: https://nyanga.page
 license: Proprietary (source-available, see https://github.com/nyanga-app/nyanga-app/blob/main/LICENSE)
 
@@ -26,3 +34,7 @@ contents:
     dst: /usr/share/applications/nyanga.desktop
   - src: build/icon.png
     dst: /usr/share/icons/hicolor/256x256/apps/nyanga.png
+  # What software centers show (developer, description, screenshots); the version and date are
+  # filled in by build_packages.sh.
+  - src: build/page.nyanga.app.metainfo.xml
+    dst: /usr/share/metainfo/page.nyanga.app.metainfo.xml

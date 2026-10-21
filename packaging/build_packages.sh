@@ -14,6 +14,8 @@ esac
 [ -x dist/Nyanga/Nyanga ] || { echo "Build dist/Nyanga first (packaging/build_appimage.sh)" >&2; exit 1; }
 
 echo "$VERSION" > dist/Nyanga/VERSION  # the launcher and updater compare copies by this
+sed -e "s/@VERSION@/$VERSION/" -e "s/@DATE@/$(date -u +%Y-%m-%d)/" \
+    packaging/linux/page.nyanga.app.metainfo.xml > build/page.nyanga.app.metainfo.xml
 tar -C dist --owner=0 --group=0 --numeric-owner -czf dist/Nyanga-linux-x86_64.tar.gz Nyanga
 export NYANGA_VERSION="$VERSION"
 "$NFPM" package --config packaging/nfpm.yaml --packager deb --target dist/
