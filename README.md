@@ -119,13 +119,26 @@ That's the only time you install it ✦
 If it doesn't open, your system may be missing FUSE: install `fuse3` (or `libfuse2` on older
 systems) from your package manager.
 
+**Prefer a package?** The same release has a `.deb` (Ubuntu, Debian, Mint) and an `.rpm`
+(Fedora, openSUSE). Double-click it to install it from your software center, or from a terminal:
+
+```sh
+sudo apt install ./nyanga_*_amd64.deb      # Ubuntu, Debian, Mint
+sudo dnf install ./nyanga-*.x86_64.rpm     # Fedora
+```
+
+Nyanga is then in your app menu right away. Step-by-step guides for every way are on
+[nyanga.page/install](https://nyanga.page/install/).
+
 ### 🎁 Updates
 
 When a new version is out, a card pops up with **Update now**. It downloads the new version,
 installs it and reopens by itself. Your settings and library are kept (they live in
 `%APPDATA%\Nyanga` on Windows; on Linux the settings are in `~/.config/Nyanga` and the
 library in `~/.local/share/Nyanga`). On Linux the new version
-takes the old AppImage's place, so keep it in a folder you can write to. The first time it opens after an update, a **What's new** window lists
+takes the old AppImage's place, so keep it in a folder you can write to. Installed from the
+`.deb` or `.rpm`, Nyanga keeps its updates in `~/.local/share/Nyanga/app` (no password needed),
+so `apt`/`dnf` keep showing the version you first installed; Nyanga always opens the newest one. The first time it opens after an update, a **What's new** window lists
 what changed since your last version, in plain words. Want to read it again? Click the version
 at the bottom left, or see the whole [changelog](CHANGELOG.md).
 

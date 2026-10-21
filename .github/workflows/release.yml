@@ -1,5 +1,5 @@
 # On every push to main: work out the next version from the conventional commits since the last
-# release, and if there is one, build the Windows installer and the Linux AppImage and publish them
+# release, and if there is one, build the Windows installer and the Linux AppImage, .deb and .rpm and publish them
 # as a GitHub Release. The tag the release creates (v1.2.3) is where the version lives; the only
 # thing committed back is CHANGELOG.md, as a docs: commit so it doesn't make another release.
 name: Release
@@ -117,10 +117,23 @@ jobs:
       - name: Build the AppImage
         run: packaging/build_appimage.sh
 
+      # The .deb and .rpm (and the app folder they update themselves from) reuse the folder the
+      # AppImage build just made. nfpm builds both packages without needing dpkg or rpmbuild.
+      - name: Build the .deb and .rpm
+        run: |
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP" nfpm
+          NFPM="$RUNNER_TEMP/nfpm" packaging/build_packages.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/Nyanga-x86_64.AppImage
+          path: |
+            dist/Nyanga-x86_64.AppImage
+            dist/Nyanga-linux-x86_64.tar.gz
+            dist/nyanga_${{ needs.version.outputs.version }}-1_amd64.deb
+            dist/nyanga-${{ needs.version.outputs.version }}-1.x86_64.rpm
+          if-no-files-found: error
 
   publish:
     needs: [version, windows, linux]
@@ -139,6 +152,9 @@ jobs:
           gh release create v${{ needs.version.outputs.version }}
           out/windows/Nyanga-Setup-${{ needs.version.outputs.version }}.exe
           out/linux/Nyanga-x86_64.AppImage
+          out/linux/Nyanga-linux-x86_64.tar.gz
+          out/linux/nyanga_${{ needs.version.outputs.version }}-1_amd64.deb
+          out/linux/nyanga-${{ needs.version.outputs.version }}-1.x86_64.rpm
           out/version/whats_new.json
           --title "v${{ needs.version.outputs.version }}"
           --notes-file out/version/notes.md

@@ -1,0 +1,28 @@
+# The .deb and .rpm, built by packaging/build_packages.sh with nfpm (https://nfpm.goreleaser.com).
+# They hold the app folder PyInstaller made, a launcher, the menu entry and the icon. The app then
+# updates itself into the user's own folder (see packaging/linux/nyanga and updater.py).
+name: nyanga
+arch: amd64
+platform: linux
+version: ${NYANGA_VERSION}
+release: 1
+section: net
+priority: optional
+maintainer: Youssef Tarek <yousseftarekali04@gmail.com>  # the address already on the public commits
+description: A cute & cozy app that downloads manga as one tidy file per volume.
+vendor: Nyanga
+homepage: https://nyanga.page
+license: Proprietary (source-available, see https://github.com/nyanga-app/nyanga-app/blob/main/LICENSE)
+
+contents:
+  - src: dist/Nyanga
+    dst: /usr/lib/nyanga
+    type: tree
+  - src: packaging/linux/nyanga
+    dst: /usr/bin/nyanga
+    file_info:
+      mode: 0755
+  - src: packaging/linux/nyanga.desktop
+    dst: /usr/share/applications/nyanga.desktop
+  - src: build/icon.png
+    dst: /usr/share/icons/hicolor/256x256/apps/nyanga.png

@@ -1,0 +1,21 @@
+#!/bin/sh
+# /usr/bin/nyanga from the .deb and .rpm. Runs whichever is newer: the copy this package installed
+# (/usr/lib/nyanga), or the one Nyanga updated itself to in your own folder (app/current, which
+# needs no password to replace). NYANGA_LAUNCHER tells the app it was started this way, so it
+# updates into that folder and comes back through here.
+
+packaged=/usr/lib/nyanga
+updated=${XDG_DATA_HOME:-$HOME/.local/share}/Nyanga/app/current
+
+run=$packaged
+if [ -x "$updated/Nyanga" ] && [ -r "$updated/VERSION" ]; then
+    mine=$(cat "$packaged/VERSION" 2>/dev/null || echo 0)
+    theirs=$(cat "$updated/VERSION")
+    newest=$(printf '%s\n%s\n' "$mine" "$theirs" | sort -V | tail -n 1)
+    if [ "$newest" = "$theirs" ] && [ "$theirs" != "$mine" ]; then
+        run=$updated
+    fi
+fi
+
+export NYANGA_LAUNCHER=/usr/bin/nyanga
+exec "$run/Nyanga" "$@"

@@ -1,9 +1,13 @@
 """Finds newer releases on GitHub and installs them. Only the built app updates itself, not the source.
 
-Each release carries a Nyanga-Setup-<version>.exe for Windows and a Nyanga-x86_64.AppImage for
-Linux. On Windows, updating downloads the installer and runs it silently: it closes the app,
-replaces its files, and opens the new version. On Linux the new AppImage replaces the old file and
-is opened once the app has quit. No GUI code in here.
+Each release carries a Nyanga-Setup-<version>.exe for Windows, a Nyanga-x86_64.AppImage for
+Linux, .deb and .rpm packages, and Nyanga-linux-x86_64.tar.gz (the app folder) for those packages
+to update from. On Windows, updating downloads the installer and runs it silently: it closes the
+app, replaces its files, and opens the new version. The new AppImage replaces the old file and is
+opened once the app has quit. A .deb/.rpm install starts through /usr/bin/nyanga (which sets
+NYANGA_LAUNCHER): its updates go in the user's own folder (DATA/app/<version>, with `current`
+pointing at the one to run), so no password is needed, and the launcher runs whichever of that
+and the packaged copy is newer. No GUI code in here.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,6 +35,7 @@ RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 CHANGELOG = f"https://github.com/{REPO}/blob/main/CHANGELOG.md"
 _API = f"https://api.github.com/repos/{REPO}/releases/latest"
 _FOLDER = Path(tempfile.gettempdir()) / "nyanga-update"
+_APPS = paths.DATA / "app"  # updated copies of a .deb/.rpm install, one folder per version
 
 
 @dataclass
@@ -61,12 +67,21 @@ def notes_since(seen: str, current: str | None = None) -> list[dict]:
     return [r for r in notes() if parse(seen) < parse(r["version"]) <= upto and r["items"]]
 
 
+def launcher() -> Path | None:
+    """/usr/bin/nyanga when this copy was started by the .deb/.rpm launcher, else None."""
+    path = os.environ.get("NYANGA_LAUNCHER")
+    if not (paths.FROZEN and sys.platform != "win32" and path):
+        return None
+    return Path(path) if Path(path).is_file() else None
+
+
 def can_install() -> bool:
     """Running from source there's nothing to replace; pull the repo instead. An AppImage needs to be
-    in a folder we can write to, or the new one can't take its place."""
+    in a folder we can write to, or the new one can't take its place. A .deb/.rpm install updates
+    into the user's own folder, which is always theirs to write to."""
     if not paths.FROZEN:
         return False
-    if sys.platform == "win32":
+    if sys.platform == "win32" or launcher():
         return True
     image = appmenu.appimage()
     return image is not None and os.access(image.parent, os.W_OK)
@@ -77,6 +92,8 @@ def _ours(name: str) -> bool:
     name = name.lower()
     if sys.platform == "win32":
         return name.endswith(".exe") and "setup" in name
+    if launcher():
+        return name.endswith(".tar.gz") and "linux" in name and "x86_64" in name
     return name.endswith(".appimage") and "x86_64" in name
 
 
@@ -125,9 +142,10 @@ def download(release: Release, progress: Callable[[int, int], None]) -> Path:
 
 
 def install(installer: Path) -> None:
-    """Starts the installer on its own (or swaps in the new AppImage); the app should quit right after."""
+    """Starts the installer on its own (or swaps in the new AppImage or app folder); the app should
+    quit right after."""
     if sys.platform != "win32":
-        _swap_appimage(installer)
+        _swap_folder(installer) if launcher() else _swap_appimage(installer)
         return
     flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     subprocess.Popen([str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/update=1"],
@@ -135,8 +153,55 @@ def install(installer: Path) -> None:
 
 
 def cleanup() -> None:
-    """Removes installers left over from the last update."""
+    """Removes installers left over from the last update, and app copies a .deb/.rpm install no
+    longer runs (never the one running now: its files may still be read)."""
     shutil.rmtree(_FOLDER, ignore_errors=True)
+    if not launcher() or not _APPS.is_dir():
+        return
+    keep = {(_APPS / "current").resolve(), Path(sys.executable).resolve().parent}
+    for folder in _APPS.iterdir():
+        if folder.name != "current" and folder.resolve() not in keep:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def _swap_folder(archive: Path) -> None:
+    """Unpacks the new app folder next to the old ones, points `current` at it and opens it through
+    the launcher once this app has quit. The old copy stays until the next start (see cleanup)."""
+    start = launcher()
+    if start is None:
+        raise OSError("Nyanga wasn't started from its .deb or .rpm")
+    _APPS.mkdir(parents=True, exist_ok=True)
+    unpack = Path(tempfile.mkdtemp(prefix=".new-", dir=_APPS))
+    try:
+        with tarfile.open(archive) as tar:
+            tar.extractall(unpack, filter="data")  # refuses paths that would land outside the folder
+        app = unpack / "Nyanga"
+        version = (app / "VERSION").read_text().strip()
+        if not (app / "Nyanga").is_file() or not any(parse(version)):
+            raise OSError("The update didn't look right, try again")
+        target = _APPS / version
+        shutil.rmtree(target, ignore_errors=True)
+        app.replace(target)
+    finally:
+        shutil.rmtree(unpack, ignore_errors=True)
+    link = _APPS / ".current.new"
+    link.unlink(missing_ok=True)
+    link.symlink_to(version)  # relative, so the folder can move with its owner's home
+    link.replace(_APPS / "current")
+    _reopen(start)
+
+
+def _reopen(program: Path) -> None:
+    """Opens `program` a moment after this app quits."""
+    # A clean environment: the running AppImage and PyInstaller set paths meant for this copy only.
+    env = {k: v for k, v in os.environ.items() if k not in ("APPIMAGE", "APPDIR", "ARGV0", "OWD")}
+    if "LD_LIBRARY_PATH_ORIG" in env:
+        env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
+    else:
+        env.pop("LD_LIBRARY_PATH", None)
+    subprocess.Popen(["sh", "-c", 'sleep 2; exec "$0"', str(program)], env=env, cwd=Path.home(),
+                     start_new_session=True, close_fds=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _swap_appimage(new: Path) -> None:
@@ -149,12 +214,4 @@ def _swap_appimage(new: Path) -> None:
     shutil.copyfile(new, staged)
     staged.chmod(0o755)
     staged.replace(image)
-    # A clean environment: the running AppImage and PyInstaller set paths meant for this copy only.
-    env = {k: v for k, v in os.environ.items() if k not in ("APPIMAGE", "APPDIR", "ARGV0", "OWD")}
-    if "LD_LIBRARY_PATH_ORIG" in env:
-        env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
-    else:
-        env.pop("LD_LIBRARY_PATH", None)
-    subprocess.Popen(["sh", "-c", 'sleep 2; exec "$0"', str(image)], env=env, cwd=Path.home(),
-                     start_new_session=True, close_fds=True,
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _reopen(image)
