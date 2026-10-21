@@ -2,6 +2,11 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.13.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.13.0) (2026-10-21)
+
+### New
+- the .deb and .rpm now show up properly in software centers
+
 ## [1.12.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.12.0) (2026-10-21)
 
 ### New
