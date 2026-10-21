@@ -755,7 +755,6 @@ class DownloadPage(QWidget):
         self.running = False
         self.fractions: dict[int, float] = {}
         self.book_dir: Path | None = None
-        self.run_files: set[Path] = set()  # the files the last download made
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1070,17 +1069,13 @@ class DownloadPage(QWidget):
         self.open_btn = set_icon(QPushButton(" Open folder"), "folder")
         self.open_btn.clicked.connect(self._open_folder)
         self.open_btn.hide()
-        self.phone_btn = set_icon(QPushButton(" Send to phone"), "phone")
-        self.phone_btn.setToolTip("Send the files to your phone over Wi‑Fi ✦")
-        self.phone_btn.clicked.connect(self._send_to_phone)
-        self.phone_btn.hide()
         self.cancel_btn = set_icon(QPushButton(" Cancel"), "close")
         self.cancel_btn.clicked.connect(self._cancel)
         self.cancel_btn.hide()
         self.start_btn = set_icon(QPushButton(" Download", objectName="primary"), "download", "white", 20)
         self.start_btn.clicked.connect(self._start)
         self.start_btn.setEnabled(False)
-        for w in (self.open_btn, self.phone_btn, self.cancel_btn, self.start_btn):
+        for w in (self.open_btn, self.cancel_btn, self.start_btn):
             bl.addWidget(w)
         wrap = QWidget()
         wl = QVBoxLayout(wrap)
@@ -1448,7 +1443,6 @@ class DownloadPage(QWidget):
         self.files_card.show()
         self.back_btn.setVisible(bool(self.results))
         self.open_btn.hide()
-        self.phone_btn.hide()
         self.bytes_per_chapter = None
         self.estimating = True
         self._regroup()
@@ -1962,7 +1956,6 @@ class DownloadPage(QWidget):
         self.cancel_btn.setText(" Cancel")
         self.cancel_btn.show()
         self.open_btn.hide()
-        self.phone_btn.hide()
         self.bar_cat.start()
         self.overall.setValue(0)
         self.progress.emit(self.key, 0.0)
@@ -1980,7 +1973,6 @@ class DownloadPage(QWidget):
 
         groups = [self.groups[r] for r in rows]
         rebuild = self._incomplete(groups, fmt)
-        self.run_files = {core.target_path(title, g, fmt, self.book_dir) for g in groups}
 
         def on_status(index: int, state: str, frac: float, msg: str) -> None:
             self.bridge.status.emit(rows[index], state, frac, msg)
@@ -2061,7 +2053,6 @@ class DownloadPage(QWidget):
         self._set_locked(False)
         self.cancel_btn.hide()
         self.open_btn.show()
-        self.phone_btn.setVisible(bool(self.history.files(self.key)))
         self._update_summary()
         took = fmt_duration(time.monotonic() - self.run_t0, about=False)
         if cancelled:
@@ -2078,13 +2069,6 @@ class DownloadPage(QWidget):
         self.cancel.set()
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.setText("Cancelling…")
-
-    def _send_to_phone(self) -> None:
-        """Every downloaded file of this manga, with the ones from the last run ticked."""
-        files = self.history.files(self.key)
-        if files:
-            ticked = {f for f in files if f in self.run_files} or None
-            SendToPhone(self, self.settings, self.info.title, files, self.history.cover_path(self.key), ticked).exec()
 
     def _open_folder(self) -> None:
         if self.book_dir and self.book_dir.exists():

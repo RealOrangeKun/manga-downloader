@@ -160,8 +160,7 @@ closed, that spot shows the delivery cat and how far along it is:
    Tap a column title to sort by it: once for up, twice for down, a third time (or a
    right-click) to go back to normal.
 4. Press **Download**. Each file gets its own progress bar; **Cancel** stops after the
-   current page, and **Open folder** shows the results when it's done. **Send to phone** sends
-   them to your phone (see below).
+   current page, and **Open folder** shows the results when it's done.
 
 Running it again with the same choices resumes where it stopped. Files that already exist
 are skipped, so delete a file to rebuild it. The exception: if the site has added chapters
