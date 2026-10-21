@@ -490,13 +490,13 @@ PAGE = """<!doctype html>
 <header>""" + _CAT + """<h1>Nyanga ✦</h1><p class="sub">$title</p></header>
 <a class="all" id="all" href="all.zip" download hidden>Save all as one zip</a>
 <button class="each" id="each" hidden>Save all as separate files</button>
+<p class="count" id="old" hidden>On this device, open each file, then use Open in… to keep it ✿</p>
 <p class="count" id="count"></p>
 <div id="list">
 $cards
 </div>
 <div class="pager" id="pager" hidden><button id="prev" aria-label="Previous page">‹</button><span
 id="where"></span><button id="next" aria-label="Next page">›</button></div>
-<p class="tip" id="old" hidden>Your device will ask which app to open each file with ✿</p>
 $tips
 </main>
 <div class="gone">""" + _CAT + """<h1>Sharing stopped ✿</h1>
@@ -520,7 +520,7 @@ function show() {
   for (i = 0; i < cards.length; i++) {
     var done = has(state.sent, num(cards[i]));
     cards[i].className = done ? "file saved" : "file";
-    cards[i].querySelector(".save").textContent = done ? "Saved ✦" : "Save";
+    cards[i].querySelector(".save").textContent = canSave ? (done ? "Saved ✦" : "Save") : (done ? "Opened ✦" : "Open");
     cards[i].hidden = true;
   }
   for (i = 0; i < shown.length; i++) {
@@ -531,7 +531,7 @@ function show() {
   el("where").textContent = "Page " + (page + 1) + " of " + pages;
   el("prev").disabled = page === 0;
   el("next").disabled = page >= pages - 1;
-  el("all").hidden = shown.length < 2;
+  el("all").hidden = !canSave || shown.length < 2;  // old devices can't unzip
   el("all").textContent = "Save all " + shown.length + " as one zip";
   var rest = unsaved(shown).length;
   if (queue) {
@@ -542,7 +542,8 @@ function show() {
     el("each").textContent = rest === shown.length ? "Save all " + rest + " as separate files"
                                                    : "Save the other " + rest + " as separate files";
   }
-  el("count").textContent = !saved ? "" : saved === shown.length ? "All saved ♥" : saved + " of " + shown.length + " saved ✦";
+  var word = canSave ? "saved" : "opened";
+  el("count").textContent = !saved ? "" : saved === shown.length ? "All " + word + " ♥" : saved + " of " + shown.length + " " + word + " ✦";
 }
 
 function unsaved(shown) {
@@ -615,8 +616,11 @@ function check() {
   r.send();
 }
 
-// Before iOS 13, Safari can't save files: it opens them and offers apps to open them with.
-el("old").hidden = "download" in document.createElement("a");
+// Before iOS 13, Safari has no downloads: a tapped file opens, and Open in… hands it to an app that
+// keeps it. There each file opens in its own tab, so this list stays where it was for the next one;
+// the save-all buttons are hidden and this line says what to do.
+el("old").hidden = canSave;
+if (!canSave) for (var t = 0; t < cards.length; t++) cards[t].target = "_blank";
 show();
 (function loop() {  // checks more often while saving one by one, so the next file starts quickly
   check();

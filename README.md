@@ -206,6 +206,9 @@ computer need to be on the same Wi‑Fi; nothing goes through the internet.
 - On an iPhone, saved files go to **Files → Downloads**. Keep the screen on until a big download
   finishes.
 - PDF and EPUB open on any phone. CBZ needs a comic reader app, and image folders arrive as zips.
+- Older iPhones and iPads (iOS 12 and earlier) can't download from a browser, so there each file
+  has **Open**: it opens in its own tab, then use **Open in…** to hand it to an app that keeps it.
+  The save-all buttons don't show there.
 
 **Settings page**
 
