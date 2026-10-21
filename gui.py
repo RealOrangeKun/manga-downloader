@@ -2886,6 +2886,7 @@ class SendToPhone(QDialog):
         self.sent: dict[int, list[str]] = {}  # file -> the devices that have it
         self.going: dict[int, dict[str, float]] = {}  # file -> device -> how far its download is
         self.devices: list[str] = []  # in the order they turned up
+        self.gone: dict[int, bool] = {}  # files deleted while sharing -> whether they were ticked
         self.visited = False
         self.opened = time.monotonic()
 
@@ -3019,8 +3020,9 @@ class SendToPhone(QDialog):
         self._mood()
 
     def _tick_all(self, on: bool) -> None:
-        for row in self.rows:
-            row["check"].setChecked(on)
+        for i, row in enumerate(self.rows):
+            if i not in self.gone:
+                row["check"].setChecked(on)
 
     def _hint(self) -> None:
         if not self.visited and time.monotonic() - self.opened > self.NO_VISIT_TIP:
@@ -3032,7 +3034,34 @@ class SendToPhone(QDialog):
             text = "Same Wi‑Fi as this computer, please ✿"
         self.hint.setText(text)
 
+    def _check_files(self) -> None:
+        """Someone may delete or move a file while sharing: its row greys out as "Gone" and it leaves
+        the phones' list (phone.Share.available skips it too). Put back, it returns as it was."""
+        for i, (row, path) in enumerate(zip(self.rows, self.share.files)):
+            there = path.exists()
+            if there == (i not in self.gone):
+                continue
+            check = row["check"]
+            if there:
+                ticked = self.gone.pop(i)
+                check.setEnabled(True)
+                check.setToolTip(check.full)
+                try:
+                    row["size"].setText(fmt_size(phone.size_of(path)))
+                except OSError:
+                    row["size"].setText("")
+                check.setChecked(ticked)
+            else:
+                self.gone[i] = check.isChecked()
+                check.setChecked(False)
+                check.setEnabled(False)
+                check.setToolTip("This file isn't on the computer anymore ✿")
+                row["size"].setText("Gone ✿")
+            self._show_row(i)
+        self._mood()
+
     def _tick(self) -> None:
+        self._check_files()
         self._hint()
         if time.monotonic() - self.share.last_activity > self.IDLE_STOP:
             self.share.stop()
@@ -3066,8 +3095,14 @@ class SendToPhone(QDialog):
         self._mood()
 
     def _show_row(self, i: int) -> None:
-        """Sent once any device has it (hover says which); else the furthest download; else the size."""
+        """Sent once any device has it (hover says which); else the furthest download; else the size.
+        A file deleted while sharing says "Gone" instead."""
         row, going, got = self.rows[i], self.going.get(i, {}), self.sent.get(i, [])
+        if i in self.gone:
+            for key in ("sent", "bar"):
+                row[key].hide()
+            row["size"].show()
+            return
         row["sent"].setVisible(bool(got))
         row["sent"].setToolTip("Sent to " + self._names(got) if got else "")
         row["bar"].setVisible(bool(going) and not got)

@@ -211,22 +211,33 @@ class Share:
                 self.devices[cookie] = f"{kind} {same + 1}" if same else kind
             return cookie
 
+    def available(self) -> list[int]:
+        """The files that are ticked and still there: someone may delete one while sharing."""
+        return [i for i in sorted(self.allowed) if i < len(self.files) and self.files[i].exists()]
+
     def state(self, device: str) -> dict:
-        return {"allowed": sorted(self.allowed), "sent": sorted(self.sent.get(device, ()))}
+        return {"allowed": self.available(), "sent": sorted(self.sent.get(device, ()))}
 
     def finished(self, i: int, device: str) -> None:
         with self.lock:
             self.sent.setdefault(device, set()).add(i)
-        total = size_of(self.files[i])
+        try:
+            total = size_of(self.files[i])
+        except OSError:  # deleted the moment it finished sending
+            total = 0
         self.on_event("done", i, total, total, self.devices[device])
 
     def page(self, device: str) -> str:
         cards = []
         for i, f in enumerate(self.files):
+            try:
+                size = _fmt_size(size_of(f))
+            except OSError:
+                continue  # deleted since sharing started: leave it off rather than break the page
             name = html.escape(download_name(f))
             cover = '<img src="cover" alt="">' if self.cover else '<div class="nocover">✦</div>'
             cards.append(f'<a class="file" data-i="{i}" href="f/{i}" download hidden>{cover}'
-                         f'<span class="info"><b>{name}</b><small>{_fmt_size(size_of(f))}</small></span>'
+                         f'<span class="info"><b>{name}</b><small>{size}</small></span>'
                          f'<span class="save">Save</span></a>')
         kinds = {Path(download_name(f)).suffix.lower() for f in self.files}
         tips = "".join(f"<p class='tip'>{TIPS[k]}</p>" for k in sorted(kinds) if k in TIPS)
@@ -294,9 +305,15 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(200, font.read_bytes(), "font/ttf", cache=True)
             elif route.startswith("f/") and route[2:].isdigit() and int(route[2:]) in share.allowed \
                     and int(route[2:]) < len(share.files):
-                self._file(int(route[2:]))
+                if share.files[int(route[2:])].exists():
+                    self._file(int(route[2:]))
+                else:
+                    self._send(404, PAGE_MISSING.encode(), "text/html; charset=utf-8")
             elif route == "all.zip" and share.allowed:
-                self._all()
+                if share.available():
+                    self._all()
+                else:
+                    self._send(404, PAGE_MISSING.encode(), "text/html; charset=utf-8")
             else:
                 self._send(404, PAGE_GONE.encode(), "text/html; charset=utf-8")
         except OSError:  # the phone cancelled or lost the Wi-Fi (reset, broken pipe, aborted on Windows)
@@ -356,7 +373,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _all(self) -> None:
         share = self.share
-        chosen = [i for i in sorted(share.allowed) if i < len(share.files)]
+        chosen = share.available()  # anything deleted since is left out
         items = [share.files[i] for i in chosen]
         self._attachment(f"{share.title}.zip", TYPES[".zip"], zip_size(items))
         out = _Writer(self.wfile)
@@ -540,3 +557,8 @@ PAGE_GONE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><style>""" + _STYLE + """</style></head>
 <body class="stopped"><div class="gone">""" + _CAT + """<h1>Not shared right now ✿</h1>
 <p class="sub">Tick it in Send to your phone on your computer, then tap it again</p></div></body></html>"""
+
+PAGE_MISSING = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><style>""" + _STYLE + """</style></head>
+<body class="stopped"><div class="gone">""" + _CAT + """<h1>This file isn't on the computer anymore ✿</h1>
+<p class="sub">It was moved or deleted. Go back to pick another one</p></div></body></html>"""
