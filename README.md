@@ -288,6 +288,10 @@ py -m venv .venv
 
 After the first time, only the last line is needed.
 
+Add `--memory` to try things without touching your settings or library: they're kept in a
+throwaway folder in memory (`/dev/shm` on Linux, the temp folder elsewhere) and deleted when
+Nyanga closes. Downloaded manga still go to your download folder.
+
 ## 🧶 Contributing
 
 - Code layout: `core.py` (sites, rate limiting, download pipeline), `builders.py` (output

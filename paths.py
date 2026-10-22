@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 # True inside the PyInstaller build.
@@ -23,5 +26,13 @@ if FROZEN and sys.platform == "win32":
 elif FROZEN:
     DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "Nyanga"
     CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "Nyanga"
+elif "--memory" in sys.argv or os.environ.get("NYANGA_MEMORY"):
+    # From source with --memory: a throwaway folder in RAM (/dev/shm), gone when the app quits.
+    # Worker processes find it through NYANGA_MEMORY instead of making their own.
+    if not os.environ.get("NYANGA_MEMORY"):
+        shm = "/dev/shm" if os.path.isdir("/dev/shm") else None
+        os.environ["NYANGA_MEMORY"] = tempfile.mkdtemp(prefix="nyanga-", dir=shm)
+        atexit.register(shutil.rmtree, os.environ["NYANGA_MEMORY"], ignore_errors=True)
+    DATA = CONFIG = Path(os.environ["NYANGA_MEMORY"])
 else:
     DATA = CONFIG = _HERE
