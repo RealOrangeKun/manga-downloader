@@ -2,6 +2,15 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.14.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.14.0) (2026-10-22)
+
+### New
+- library: you can now read your manga right in Nyanga
+- added a debug mode that writes a log file
+
+### Fixes
+- library: a moved or renamed folder no longer makes Nyanga forget your downloads
+
 ## [1.13.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.13.0) (2026-10-21)
 
 ### New
