@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import io
 import shutil
 import time
 import uuid
@@ -10,6 +11,7 @@ import zipfile
 from pathlib import Path
 
 import img2pdf
+import pikepdf
 from PIL import Image
 
 FORMATS = {
@@ -142,6 +144,31 @@ def build_epub(images: list[Path], out: Path, title: str) -> None:
 
 
 BUILDERS = {"cbz": build_cbz, "pdf": build_pdf, "epub": build_epub, "images": build_images}
+
+
+PICTURES = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+
+
+def pages_of(path: Path) -> list[tuple[str, bytes]]:
+    """The pictures of a file we made, in order, as (suffix, bytes), to reuse in a new file.
+    PDF pictures come out as they went in (JPEG or PNG), not redrawn."""
+    if path.is_dir():
+        return [(p.suffix, p.read_bytes()) for p in sorted(path.iterdir()) if p.suffix.lower() in PICTURES]
+    if path.suffix.lower() == ".pdf":
+        pages = []
+        with pikepdf.open(path) as pdf:
+            for page in pdf.pages:
+                images = list(page.images.values())
+                if len(images) != 1:
+                    raise ValueError(f"page {len(pages) + 1} of {path.name} has {len(images)} pictures")
+                buf = io.BytesIO()
+                suffix = pikepdf.PdfImage(images[0]).extract_to(stream=buf)
+                pages.append((suffix, buf.getvalue()))
+        return pages
+    with zipfile.ZipFile(path) as z:  # CBZ, or EPUB with its pictures in OEBPS/images
+        names = sorted(n for n in z.namelist() if Path(n).suffix.lower() in PICTURES
+                       and (path.suffix.lower() != ".epub" or n.startswith("OEBPS/images/")))
+        return [(Path(n).suffix, z.read(n)) for n in names]
 
 
 def build_file(fmt: str, images: list[Path], out: Path, title: str) -> Path:

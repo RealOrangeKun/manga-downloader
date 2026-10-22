@@ -186,6 +186,12 @@ are skipped, so delete a file to rebuild it. The exception: if the site has adde
 to a volume you already have, that file is made again with them (the old one stays until
 the new one is done).
 
+Chapters you already have aren't downloaded again. Say you got chapters 1 and 2, then switch
+to 5 chapters per file: the new "Ch. 1-5" file takes the pages of 1 and 2 from the file you
+have and downloads only 3 to 5. The bottom bar counts just those ("3 chapters to download,
+2 from your files"), and so does the size. If an old file doesn't line up with the site any
+more (say a chapter changed), those chapters are downloaded as usual.
+
 Webtoons (long vertical strips) are cut into screen-sized pages in EPUB. CBZ and PDF keep
 the original strips; use a reader with a continuous-scroll mode for those.
 

@@ -1,5 +1,6 @@
 requests
 pillow
 img2pdf
+pikepdf
 PySide6
 segno

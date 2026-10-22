@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from builders import build_file
+from builders import build_file, pages_of
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,9 @@ class Group:
     """The chapters that end up in one output file."""
     label: str
     chapters: list[Chapter]
+    # Chapters already in a file we made: number -> (that file, all its chapters in order), so
+    # their pages come out of it instead of being downloaded again.
+    reuse: dict[float, tuple[str, list[Chapter]]] = field(default_factory=dict)
 
 
 @dataclass
@@ -398,6 +401,7 @@ def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
     """Download every page of a group into group_dir; already-downloaded chapters are skipped.
     on_progress also gets the bytes just downloaded (0 for a page already on disk), for the speed."""
     n = len(group.chapters)
+    split: dict[str, dict[float, list[tuple[str, bytes]]]] = {}  # reused file -> its pages by chapter
     for done, ch in enumerate(group.chapters):
         ch_dir = group_dir / f"ch_{ch.number:08.2f}"
         if (ch_dir / ".done").exists():
@@ -405,6 +409,17 @@ def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
         ch_dir.mkdir(parents=True, exist_ok=True)
         if cancel.is_set():
             raise Cancelled
+        if ch.number in group.reuse:
+            path, inside = group.reuse[ch.number]
+            if path not in split:
+                split[path] = _split_file(site, Path(path), inside, cancel)
+            pages = split[path].get(ch.number)
+            if pages:
+                for i, (suffix, data) in enumerate(pages, 1):
+                    (ch_dir / f"{i:04d}{suffix}").write_bytes(data)
+                (ch_dir / ".done").touch()
+                on_progress((done + 1) / n, f"Ch. {fmt_num(ch.number)}  ·  from your file", 0)
+                continue
         urls = site.page_urls(ch)
         for i, url in enumerate(urls, 1):
             if cancel.is_set():
@@ -419,6 +434,32 @@ def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
     # Only this group's chapters: the folder can hold others left over from an earlier attempt.
     dirs = [group_dir / f"ch_{ch.number:08.2f}" for ch in group.chapters]
     return sorted(p for d in dirs for p in d.glob("*") if p.name != ".done" and ".conv." not in p.name)
+
+
+def _split_file(site, path: Path, chapters: list[Chapter], cancel) -> dict[float, list[tuple[str, bytes]]]:
+    """The pages of a file we made, by chapter. Files keep no chapter marks, so this asks the site
+    how many pages each chapter has; if they don't add up (a strip EPUB cut into pages, a chapter
+    the site changed since), nothing is reused and those chapters are downloaded as usual."""
+    try:
+        pages = pages_of(path)
+        counts = []
+        for ch in chapters:
+            if cancel.is_set():
+                raise Cancelled
+            counts.append(len(site.page_urls(ch)))
+    except Cancelled:
+        raise
+    except Exception as e:
+        log.info("can't reuse %s: %s", path, e)
+        return {}
+    if sum(counts) != len(pages):
+        log.info("can't reuse %s: %d pages, the site says %d", path, len(pages), sum(counts))
+        return {}
+    out, at = {}, 0
+    for ch, count in zip(chapters, counts):
+        out[ch.number], at = pages[at:at + count], at + count
+    log.info("reusing %d chapters from %s", len(chapters), path)
+    return out
 
 
 # Job states reported to on_status.

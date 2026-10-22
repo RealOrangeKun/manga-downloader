@@ -767,6 +767,7 @@ class DownloadPage(QWidget):
         self.states: dict[int, str] = {}
         self.run_t0 = 0.0
         self.samples: list[tuple[float, float]] = []  # (time, overall progress) for the time-left estimate
+        self.reuse: dict[str, tuple[str, list[core.Chapter]]] = {}  # see _reusable
         self.got, self.got_samples = 0, []  # bytes downloaded this run, and (time, bytes) for the speed
         self.tick = QTimer(self, interval=1000)
         self.tick.timeout.connect(self._refresh_run_status)
@@ -1852,6 +1853,7 @@ class DownloadPage(QWidget):
                 self.smart["new"].add(i)
             if failed & set(keys):
                 self.smart["failed"].add(i)
+        self.reuse = self._reusable(downloaded)
         counts = {"all": len(self.groups), **{k: len(v) for k, v in self.smart.items()}}
         for kind, name in (("all", "All"), ("missing", "Not downloaded"), ("done", "Downloaded"),
                            ("new", "New ✦"), ("failed", "Failed")):
@@ -1861,6 +1863,25 @@ class DownloadPage(QWidget):
         if self.filter != "all" and not self.filter_chips[self.filter].isVisible():
             self.filter = "all"
             self.filter_chips["all"].setChecked(True)
+
+    def _reusable(self, downloaded: dict[str, str]) -> dict[str, tuple[str, list[core.Chapter]]]:
+        """Chapters already in a file on disk: key -> (that file, all its chapters in order). A new
+        file with them takes their pages from it instead of downloading them again."""
+        by_key = {chapter_key(c.number): c for c in self.info.chapters} if self.info else {}
+        files: dict[str, list[str]] = {}
+        for key, path in downloaded.items():
+            files.setdefault(path, []).append(key)
+        out = {}
+        for path, keys in files.items():
+            # Every chapter in the file must still be on the site, to find where each one starts.
+            if all(k in by_key for k in keys) and Path(path).exists():
+                inside = sorted((by_key[k] for k in keys), key=lambda c: c.number)
+                out.update({k: (path, inside) for k in keys})
+        return out
+
+    def _to_download(self, rows: list[int]) -> int:
+        """Chapters these files will really download: the rest come out of files you have."""
+        return sum(chapter_key(c.number) not in self.reuse for i in rows for c in self.groups[i].chapters)
 
     def _mark_history(self) -> None:
         """Show what is already downloaded, failed last time or new, and untick finished files."""
@@ -1912,9 +1933,11 @@ class DownloadPage(QWidget):
         swap_icon(self.select_btn, "paw" if everything else "paw_outline")
         page = self._page_files()
         self.page_btn.setText(" Unselect page" if page and all(self._ticked(i) for i in page) else " Select page")
-        chapters = sum(len(self.groups[i].chapters) for i in rows)
+        chapters = self._to_download(rows)
+        have = sum(len(self.groups[i].chapters) for i in rows) - chapters
         size = self._size_text(chapters)
-        self.summary.setText(f"{len(rows)} of {len(self.groups)} files  ·  {chapters} chapters  ·  {size}".rstrip())
+        what = f"{chapters} chapters" + (f" to download, {have} from your files" if have else "")
+        self.summary.setText(f"{len(rows)} of {len(self.groups)} files  ·  {what}  ·  {size}".rstrip(" ·"))
         waiting = self.estimating and bool(rows)
         # The bottom bar only shows them before a download; once running it shows progress instead.
         for dots, text, show in ((self.summary_dots, self.summary_wait, waiting),
@@ -1925,7 +1948,7 @@ class DownloadPage(QWidget):
             self.start_btn.setEnabled(bool(rows))
             if rows:
                 self._status(f"Ready to download {len(rows)} {'file' if len(rows) == 1 else 'files'}",
-                             f"{chapters} chapters  ·  {size}".rstrip())
+                             f"{what}  ·  {size}".rstrip(" ·"))
             else:
                 self._status("Pick at least one file")
 
@@ -2036,6 +2059,8 @@ class DownloadPage(QWidget):
 
         groups = [self.groups[r] for r in rows]
         rebuild = self._incomplete(groups, fmt)
+        groups = [replace(g, reuse={c.number: self.reuse[chapter_key(c.number)] for c in g.chapters
+                                    if chapter_key(c.number) in self.reuse}) for g in groups]
 
         def on_status(index: int, state: str, frac: float, msg: str, got: int = 0) -> None:
             self.bridge.status.emit(rows[index], state, frac, msg, got)
