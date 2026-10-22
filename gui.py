@@ -137,7 +137,7 @@ class Bridge(QObject):
     about_missed = Signal(int, int)  # results-page token, result index whose page couldn't be read
     fetched = Signal(object, object)  # site, MangaInfo
     fetch_failed = Signal(str)
-    status = Signal(int, str, float, str)  # table row, state, fraction, message
+    status = Signal(int, str, float, str, int)  # table row, state, fraction, message, bytes just downloaded
     finished = Signal(list, bool)  # failed rows, cancelled
     estimated = Signal(object, object)  # MangaInfo, average bytes per chapter (or None)
 
@@ -767,6 +767,7 @@ class DownloadPage(QWidget):
         self.states: dict[int, str] = {}
         self.run_t0 = 0.0
         self.samples: list[tuple[float, float]] = []  # (time, overall progress) for the time-left estimate
+        self.got, self.got_samples = 0, []  # bytes downloaded this run, and (time, bytes) for the speed
         self.tick = QTimer(self, interval=1000)
         self.tick.timeout.connect(self._refresh_run_status)
         self.site = None
@@ -1975,6 +1976,7 @@ class DownloadPage(QWidget):
         self.status_dots.stop()
         self.status_wait.hide()
         self.samples = []
+        self.got, self.got_samples = 0, []
         self.tick.start()
         self._set_locked(True)
         self.start_btn.setEnabled(False)
@@ -2000,8 +2002,8 @@ class DownloadPage(QWidget):
         groups = [self.groups[r] for r in rows]
         rebuild = self._incomplete(groups, fmt)
 
-        def on_status(index: int, state: str, frac: float, msg: str) -> None:
-            self.bridge.status.emit(rows[index], state, frac, msg)
+        def on_status(index: int, state: str, frac: float, msg: str, got: int = 0) -> None:
+            self.bridge.status.emit(rows[index], state, frac, msg, got)
 
         def work() -> None:
             failed = core.run_jobs(self.site, title, groups, fmt, self.book_dir, work_dir,
@@ -2024,7 +2026,8 @@ class DownloadPage(QWidget):
                 found.add(i)
         return frozenset(found)
 
-    def _on_status(self, row: int, state: str, frac: float, msg: str) -> None:
+    def _on_status(self, row: int, state: str, frac: float, msg: str, got: int = 0) -> None:
+        self.got += got
         if state not in (core.DOWNLOADING, core.BUILDING):
             log_at = logging.WARNING if state == core.FAILED else logging.INFO
             logger.log(log_at, "file %d (%s): %s %s", row, self.groups[row].label, state, msg)
@@ -2061,8 +2064,16 @@ class DownloadPage(QWidget):
         now, overall = time.monotonic(), self._overall()
         self.samples = [(t, v) for t, v in self.samples if now - t <= 30] + [(now, overall)]
         finished = sum(1 for st in self.states.values() if st in (core.DONE, core.SKIPPED, core.FAILED))
-        detail = f"{finished} of {len(self.states)} files done  ·  {self._eta(now, overall)}"
+        self.got_samples = [(t, n) for t, n in self.got_samples if now - t <= 5] + [(now, self.got)]
+        detail = f"{finished} of {len(self.states)} files done  ·  {self._speed()}{self._eta(now, overall)}"
         self._status(f"Downloading… {int(overall * 100)}%", detail)
+
+    def _speed(self) -> str:
+        """Download speed over the last 5 seconds, like "1.2 MB/s  ·  ", or nothing until it's known."""
+        (t_old, n_old), (now, n) = self.got_samples[0], self.got_samples[-1]
+        if now - t_old < 2 or not self.got:
+            return ""
+        return f"{fmt_size((n - n_old) / (now - t_old))}/s  ·  "
 
     def _eta(self, now: float, overall: float) -> str:
         elapsed = now - self.run_t0

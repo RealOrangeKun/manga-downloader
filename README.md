@@ -174,7 +174,8 @@ closed, that spot shows the delivery cat and how far along it is:
    Long series are split into pages (20 files each, changeable in Settings); use ‹ › to flip.
    Tap a column title to sort by it: once for up, twice for down, a third time (or a
    right-click) to go back to normal.
-4. Press **Download**. Each file gets its own progress bar; **Cancel** stops after the
+4. Press **Download**. Each file gets its own progress bar, and the bar at the bottom shows how
+   fast it's downloading and how long is left; **Cancel** stops after the
    current page, and **Open folder** shows the results when it's done.
 
 Running it again with the same choices resumes where it stopped. Files that already exist

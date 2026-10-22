@@ -394,8 +394,9 @@ def image_ext(data: bytes) -> str:
 
 
 def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
-                   on_progress: Callable[[float, str], None]) -> list[Path]:
-    """Download every page of a group into group_dir; already-downloaded chapters are skipped."""
+                   on_progress: Callable[[float, str, int], None]) -> list[Path]:
+    """Download every page of a group into group_dir; already-downloaded chapters are skipped.
+    on_progress also gets the bytes just downloaded (0 for a page already on disk), for the speed."""
     n = len(group.chapters)
     for done, ch in enumerate(group.chapters):
         ch_dir = group_dir / f"ch_{ch.number:08.2f}"
@@ -408,10 +409,12 @@ def download_group(site, group: Group, group_dir: Path, cancel: threading.Event,
         for i, url in enumerate(urls, 1):
             if cancel.is_set():
                 raise Cancelled
+            got = 0
             if not list(ch_dir.glob(f"{i:04d}.*")):
                 data = site.image(url)
                 (ch_dir / f"{i:04d}{image_ext(data)}").write_bytes(data)
-            on_progress((done + i / len(urls)) / n, f"Ch. {fmt_num(ch.number)}  ·  page {i}/{len(urls)}")
+                got = len(data)
+            on_progress((done + i / len(urls)) / n, f"Ch. {fmt_num(ch.number)}  ·  page {i}/{len(urls)}", got)
         (ch_dir / ".done").touch()
     # Only this group's chapters: the folder can hold others left over from an earlier attempt.
     dirs = [group_dir / f"ch_{ch.number:08.2f}" for ch in group.chapters]
@@ -433,7 +436,7 @@ def target_path(title: str, group: Group, fmt: str, book_dir: Path) -> Path:
 
 
 def make_file(site, index: int, group: Group, fmt: str, title: str, book_dir: Path, work_dir: Path,
-              keep_tmp: bool, cancel, report: Callable[[int, str, float, str], None],
+              keep_tmp: bool, cancel, report: Callable[..., None],
               build: Callable[..., Path], rebuild: bool = False) -> bool:
     """Download one group and build its file. An existing file is skipped, unless `rebuild` (it is
     missing chapters added since): then a new one is built beside it and replaces it once done.
@@ -448,7 +451,7 @@ def make_file(site, index: int, group: Group, fmt: str, title: str, book_dir: Pa
             return True
         group_dir = work_dir / safe_name(group.label)
         images = download_group(site, group, group_dir, cancel,
-                                lambda frac, msg: report(index, DOWNLOADING, frac, msg))
+                                lambda frac, msg, got: report(index, DOWNLOADING, frac, msg, got))
         report(index, BUILDING, 1.0, f"{'Remaking' if rebuild else 'Making'} {fmt.upper()}")
         if target.exists():
             out = target.with_name(f"rebuilding - {target.name}")
@@ -482,7 +485,7 @@ def _process_job(site, index, group, fmt, title, book_dir, work_dir, keep_tmp, c
 
 def run_jobs(site, title: str, groups: list[Group], fmt: str, book_dir: Path, work_dir: Path,
              keep_tmp: bool, workers: int, cancel: threading.Event,
-             on_status: Callable[[int, str, float, str], None], mode: str = THREADS,
+             on_status: Callable[..., None], mode: str = THREADS,
              rebuild: frozenset[int] = frozenset()) -> list[int]:
     """Download and build each group, `workers` at a time. Returns the indexes that failed.
     Groups whose index is in `rebuild` are made again even if their file exists.
