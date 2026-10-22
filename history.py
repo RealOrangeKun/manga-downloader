@@ -8,6 +8,7 @@ per file changes between downloads.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import paths
 
 LIBRARY = paths.DATA / "library"
+log = logging.getLogger(__name__)
 
 
 def chapter_key(number: float) -> str:
@@ -27,7 +29,8 @@ class History:
         self.path = folder / "history.json"
         try:
             self.data: dict[str, dict] = json.loads(self.path.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            log.info("no history read from %s (%s)", self.path, e)
             self.data = {}
 
     def save(self) -> None:
@@ -115,6 +118,7 @@ class History:
         entry["pending"] = [c for c in entry["pending"] if c not in done]
         entry["failed"] = [c for c in entry["failed"] if c not in done]
         entry["last_download"] = time.time()
+        log.info("%s: chapters %s saved as %s", key, ",".join(chapters), path)
         self.save()
 
     def file_failed(self, key: str, chapters: list[str]) -> None:
@@ -122,6 +126,7 @@ class History:
         bad = set(chapters)
         entry["pending"] = [c for c in entry["pending"] if c not in bad]
         entry["failed"] = sorted(set(entry["failed"]) | bad, key=float)
+        log.warning("%s: chapters %s failed", key, ",".join(chapters))
         self.save()
 
     def log_read(self, key: str, path: Path, page: int, pages: int) -> None:
@@ -147,6 +152,8 @@ class History:
         changed = False
         for entry in self.data.values():
             gone = [c for c, f in entry.get("downloaded", {}).items() if not Path(f).exists()]
+            for f in sorted({entry["downloaded"][c] for c in gone}):
+                log.warning("%s: forgetting %s, the file is gone (deleted or moved)", entry.get("title"), f)
             for c in gone:
                 del entry["downloaded"][c]
             changed |= bool(gone)

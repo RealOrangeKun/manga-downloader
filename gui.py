@@ -6,6 +6,7 @@ import atexit
 import getpass
 import html
 import json
+import logging
 import math
 import os
 import random
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
 
 import appmenu
 import core
+import log
 import paths
 import phone
 import reader
@@ -40,6 +42,8 @@ from history import History, ago, chapter_key
 from loader import CatLoader, MiniCat, paint_mini_cat, paint_transfer_cat, paint_update_cat
 from builders import FORMATS
 from version import __version__
+
+logger = logging.getLogger(__name__)
 
 # The theme in use (theme.LIGHT or theme.DARK); helpers that paint read it.
 CURRENT = {"mode": theme.LIGHT}
@@ -289,6 +293,7 @@ def folder_row(edit: QLineEdit, title: str) -> QHBoxLayout:
 
     def pick() -> None:
         chosen = QFileDialog.getExistingDirectory(edit.window(), title, edit.text() or str(Path.home()))
+        logger.info("%s picked: %r (exists: %s)", title, chosen, bool(chosen) and Path(chosen).is_dir())
         if chosen:
             edit.setText(chosen)
 
@@ -1943,6 +1948,8 @@ class DownloadPage(QWidget):
         workers = self.settings.workers
         mode = self.settings.download_mode
         self.site.limiter.delay = self.settings.request_delay
+        logger.info("download %s: %d files as %s into %s (temp %s), %d at once on %s",
+                    self.key, len(rows), fmt, self.book_dir, work_dir, workers, mode)
 
         self.running = True
         self.cancel = threading.Event()
@@ -2002,6 +2009,9 @@ class DownloadPage(QWidget):
         return frozenset(found)
 
     def _on_status(self, row: int, state: str, frac: float, msg: str) -> None:
+        if state not in (core.DOWNLOADING, core.BUILDING):
+            log_at = logging.WARNING if state == core.FAILED else logging.INFO
+            logger.log(log_at, "file %d (%s): %s %s", row, self.groups[row].label, state, msg)
         bar = self._bar(row)
         bar.setValue(int(frac * 1000))
         if state == core.DOWNLOADING:
@@ -2520,7 +2530,10 @@ class Reader(QWidget):
             try:
                 self.cache[i] = self.book.image(i)
             except (OSError, KeyError, ValueError):
+                logger.exception("page %d of %s", i + 1, self.path)
                 self.cache[i] = QImage()
+            if self.cache[i].isNull():
+                logger.warning("page %d of %s didn't load", i + 1, self.path)
             while len(self.cache) > self.CACHE:
                 self.cache.pop(max(self.cache, key=lambda p: abs(p - self.page)))
         return self.cache[i]
@@ -2724,6 +2737,9 @@ class LibraryPage(QWidget):
     def refresh(self) -> None:
         """Rebuild the cards from history, then look for new chapters in the background."""
         self.history.prune_missing()
+        for key, entry in self.history.entries():
+            logger.debug("library %s: %d chapters downloaded, %d files on disk, folder %s", key,
+                         len(entry.get("downloaded", {})), len(self.history.files(key)), self._folder(entry))
         while self.list.count():
             w = self.list.takeAt(0).widget()
             if w:
@@ -2848,9 +2864,11 @@ class LibraryPage(QWidget):
         if not path.exists():
             self.refresh()  # moved or deleted since
             return
+        logger.info("reading %s", path)
         try:
             book = Reader(self, self.settings, self.history, key, path)
         except (OSError, ValueError, zipfile.BadZipFile) as e:
+            logger.exception("couldn't read %s", path)
             QMessageBox.warning(self, "Couldn't read it", f"{path.name} couldn't be opened ✿\n\n{e}")
             return
         book.closed.connect(self._fill)
@@ -2862,6 +2880,7 @@ class LibraryPage(QWidget):
         path = PickFile.ask(self, self.history, key, "Open")
         if not path:
             return
+        logger.info("opening %s in its usual app", path)
         if path.exists() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
             self.history.log_opened(key, path)
             self._fill(key)
@@ -4023,7 +4042,11 @@ class MainWindow(QWidget):
 
 
 def main() -> None:
+    log_file = log.setup(log.wanted(sys.argv))
     app = QApplication(sys.argv)
+    if log_file:
+        log.qt_messages()
+        logger.info("debug log: %s", log_file)
     app.setApplicationName("nyanga")
     app.setApplicationDisplayName("Nyanga")
     appmenu.follow()

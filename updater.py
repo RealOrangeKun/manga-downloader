@@ -13,6 +13,7 @@ and the packaged copy is newer. No GUI code in here.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -29,6 +30,8 @@ import requests
 import appmenu
 import paths
 from version import __version__
+
+log = logging.getLogger(__name__)
 
 REPO = "nyanga-app/nyanga-app"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
@@ -105,6 +108,7 @@ def latest() -> Release | None:
     resp.raise_for_status()
     data = resp.json()
     asset = next((a for a in data.get("assets", []) if _ours(a["name"])), None)
+    log.info("latest release %s, file for this system: %s", data.get("tag_name"), asset and asset["name"])
     if asset is None:
         return None
     return Release(data["tag_name"].lstrip("v"), data.get("body") or "", asset["browser_download_url"],
@@ -125,6 +129,7 @@ def download(release: Release, progress: Callable[[int, int], None]) -> Path:
     _FOLDER.mkdir(parents=True, exist_ok=True)
     out = _FOLDER / (Path(release.name).name or f"Nyanga-Setup-{release.version}.exe")
     part = out.with_suffix(".part")
+    log.info("downloading update %s to %s", release.url, out)
     with requests.get(release.url, stream=True, timeout=30) as resp:
         resp.raise_for_status()
         total = int(resp.headers.get("content-length") or release.size)
@@ -144,6 +149,7 @@ def download(release: Release, progress: Callable[[int, int], None]) -> Path:
 def install(installer: Path) -> None:
     """Starts the installer on its own (or swaps in the new AppImage or app folder); the app should
     quit right after."""
+    log.info("installing update from %s", installer)
     if sys.platform != "win32":
         _swap_folder(installer) if launcher() else _swap_appimage(installer)
         return

@@ -5,6 +5,7 @@ downloads/
 .manga-tmp/
 settings.json
 library/
+logs/
 build/
 dist/
 notes.md

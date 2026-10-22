@@ -252,6 +252,17 @@ Settings and history are saved in `%APPDATA%\Nyanga` in the installed app on Win
 `~/.config/Nyanga` (settings) and `~/.local/share/Nyanga` (library) in the Linux AppImage, or next to
 `nyanga.py` (`settings.json` and `library/`, both git-ignored) when running from source.
 
+**Something not working?** Start Nyanga with `--debug` and it writes everything it does to
+`nyanga-debug.log` in a `logs` folder next to your settings and library. Then do the thing that
+goes wrong again and send me that file.
+
+- Windows: press Win+R, paste `"%LOCALAPPDATA%\Programs\Nyanga\Nyanga.exe" --debug` and press
+  Enter. The log is in `%APPDATA%\Nyanga\logs`.
+- Linux: run `nyanga --debug` (or the AppImage with `--debug`). The log is in
+  `~/.local/share/Nyanga/logs`. You can also set `NYANGA_DEBUG=1` instead of the flag.
+- From source: `.venv/bin/python nyanga.py --debug`. The log is in `logs/` (git-ignored) and also
+  shows in the terminal.
+
 ## 🛠️ Run from source
 
 Needs Python 3.10 or newer. Run these from the project folder.

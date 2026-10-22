@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import logging
 import secrets
 import socket
 import threading
@@ -22,6 +23,8 @@ from typing import Callable
 from urllib.parse import quote
 
 import paths
+
+log = logging.getLogger(__name__)
 
 COOKIE = "nyanga_device"
 PORT = 8765  # tried first so the address stays the same between shares; any free port otherwise
@@ -181,6 +184,7 @@ class Share:
         self.server.daemon_threads = True
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.url = f"http://{ip}:{self.server.server_address[1]}/{self.token}/"
+        log.info("sharing %d files on %s, port %d", len(self.files), ip, self.server.server_address[1])
         return self.url
 
     def stop(self) -> None:
@@ -254,8 +258,8 @@ class _Handler(BaseHTTPRequestHandler):
     device = ""  # this request's device cookie, and its name
     name = ""
 
-    def log_message(self, *args) -> None:
-        pass
+    def log_message(self, fmt: str, *args) -> None:
+        log.debug("%s %s", self.client_address[0], (fmt % args).replace(self.share.token, "<token>"))
 
     def setup(self) -> None:
         super().setup()

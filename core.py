@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import copy
 import os
 import queue
@@ -20,6 +21,8 @@ from urllib.parse import urlencode
 import requests
 
 from builders import build_file
+
+log = logging.getLogger(__name__)
 
 NO_VOLUME = 0
 
@@ -189,6 +192,7 @@ class FanFox:
                 time.sleep(attempt * 2)  # back off a little more after each failure
             try:
                 resp = self._http.request(method, url, headers={"Referer": referer}, timeout=30)
+                log.debug("%s %s -> %s (%d bytes)", method, url, resp.status_code, len(resp.content))
                 if resp.status_code == 200:
                     return resp
                 last = f"HTTP {resp.status_code}"
@@ -196,6 +200,9 @@ class FanFox:
                     break
             except requests.RequestException as e:
                 last = type(e).__name__
+                log.debug("%s %s failed: %r", method, url, e)
+            log.info("try %d of %d for %s: %s", attempt + 1, retries, url, last)
+        log.warning("giving up on %s: %s", url, last)
         raise SiteError(f"Could not fetch {url}: {last}")
 
     @property
@@ -458,6 +465,7 @@ def make_file(site, index: int, group: Group, fmt: str, title: str, book_dir: Pa
         report(index, CANCELLED, 0.0, "")
         return True
     except Exception as e:  # report and carry on with the other files
+        log.exception("%s failed", group.label)
         report(index, FAILED, 0.0, str(e))
         return False
     finally:
@@ -537,6 +545,7 @@ def _run_in_processes(site, title, groups, fmt, book_dir, work_dir, keep_tmp, wo
                     try:
                         ok.append(f.result())
                     except Exception as e:  # the worker process itself died
+                        log.exception("worker process for file %d died", i)
                         on_status(i, FAILED, 0.0, str(e))
                         ok.append(False)
         finally:
