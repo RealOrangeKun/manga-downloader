@@ -164,6 +164,8 @@ QFrame#updatePill[busy="true"]:hover { background: $button_hover; }
 QLabel#updatePillText { color: white; font-size: 14px; font-weight: 700; background: transparent; }
 QFrame#updatePill[busy="true"] QLabel#updatePillText { color: $accent; }
 QLabel#libTitle { font-size: 17px; font-weight: 700; }
+QFrame#missing { background: $chip; border-radius: 12px; }
+QLabel#missingText { color: $error; font-size: 12px; font-weight: 600; background: transparent; }
 QLabel#newBadge {
     background: $primary_b; color: white; border-radius: 9px; padding: 2px 9px; font-size: 11px; font-weight: 700;
 }

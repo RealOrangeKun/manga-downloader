@@ -147,22 +147,60 @@ class History:
         self.save()
         return new
 
+    @staticmethod
+    def _deleted(path: str) -> bool:
+        """The file is gone but its folder is still there: deleted or moved out on purpose. When the
+        whole folder is missing (renamed, moved, a drive unplugged) the file may well come back."""
+        p = Path(path)
+        return not p.exists() and p.parent.is_dir()
+
     def prune_missing(self) -> None:
-        """Forget downloads whose files were deleted or moved, so they can be downloaded again."""
+        """Forget downloads whose files were deleted, so they can be downloaded again. Files in a
+        folder that has gone missing are kept (see missing_folders)."""
         changed = False
         for entry in self.data.values():
-            gone = [c for c, f in entry.get("downloaded", {}).items() if not Path(f).exists()]
+            gone = [c for c, f in entry.get("downloaded", {}).items() if self._deleted(f)]
             for f in sorted({entry["downloaded"][c] for c in gone}):
-                log.warning("%s: forgetting %s, the file is gone (deleted or moved)", entry.get("title"), f)
+                log.warning("%s: forgetting %s, the file was deleted or moved out of its folder", entry.get("title"), f)
             for c in gone:
                 del entry["downloaded"][c]
             changed |= bool(gone)
-            stale = [f for f in entry.get("reads", {}) if not Path(f).exists()]
+            stale = [f for f in entry.get("reads", {}) if self._deleted(f)]
             for f in stale:
                 del entry["reads"][f]
             changed |= bool(stale)
         if changed:
             self.save()
+
+    def missing_folders(self, key: str) -> list[Path]:
+        """Folders that downloaded files of this manga were in, which aren't there anymore."""
+        folders = {Path(f).parent for f in self.data.get(key, {}).get("downloaded", {}).values()}
+        return sorted(f for f in folders if not f.is_dir())
+
+    def relocate(self, key: str, old: Path, new: Path) -> int:
+        """The files that were in `old` now live in `new`: point the records there, for the files
+        found in it. Returns how many files were found."""
+        entry, moved = self.data[key], {}
+        for c, f in entry.get("downloaded", {}).items():
+            if Path(f).parent == old and (new / Path(f).name).exists():
+                moved[f] = str(new / Path(f).name)
+                entry["downloaded"][c] = moved[f]
+        reads = entry.get("reads", {})
+        for f in [f for f in reads if f in moved]:
+            reads[moved[f]] = reads.pop(f)
+        log.info("%s: %d files found in %s (were in %s)", key, len(moved), new, old)
+        self.save()
+        return len(moved)
+
+    def forget_folder(self, key: str, folder: Path) -> None:
+        """Stop counting the files that were in a missing folder, so they can be downloaded again."""
+        entry = self.data[key]
+        for c in [c for c, f in entry.get("downloaded", {}).items() if Path(f).parent == folder]:
+            del entry["downloaded"][c]
+        for f in [f for f in entry.get("reads", {}) if Path(f).parent == folder]:
+            del entry["reads"][f]
+        log.info("%s: forgot the files in missing folder %s", key, folder)
+        self.save()
 
     @staticmethod
     def folder(entry: dict) -> Path | None:

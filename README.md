@@ -208,8 +208,11 @@ of all chapters on the site), and what failed or is still waiting.
   pick more.
 - Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
   a "new" badge.
-- If you delete or move a downloaded file, it no longer counts as downloaded and can be
-  downloaded again.
+- If you delete a downloaded file (or move it out of its folder), it no longer counts as
+  downloaded and can be downloaded again.
+- If a whole folder goes missing (renamed, moved, or on a drive that isn't plugged in), its files
+  still count, and the card says it can't find them. **Find folder** points Nyanga at where the
+  folder is now, and **Forget them** lets you download them again.
 - The × on a card (or **Remove from library** on the Download page) takes a manga off the
   library. If it has downloaded files, you choose to keep them or delete them too. Kept files
   still count: open that manga again and it shows what you have, ready to add back.

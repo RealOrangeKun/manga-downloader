@@ -2789,6 +2789,8 @@ class LibraryPage(QWidget):
         col.addWidget(meta)
         when = label("", "hint")
         col.addWidget(when)
+        for folder in self.history.missing_folders(key):
+            col.addWidget(self._missing_row(key, folder))
 
         buttons = QHBoxLayout()
         has_files = bool(self.history.files(key))
@@ -2856,6 +2858,39 @@ class LibraryPage(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
         else:
             self.refresh()  # it was moved or deleted; the button turns grey
+
+    def _missing_row(self, key: str, folder: Path) -> QFrame:
+        """A folder of downloaded files that has gone missing: point Nyanga at where it went, or let it go."""
+        frame = QFrame(objectName="missing")
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(12, 6, 8, 6)
+        count = sum(1 for f in {Path(f) for f in (self.history.get(key) or {}).get("downloaded", {}).values()}
+                    if f.parent == folder)
+        text = label(f"Can't find {count} file{'s' if count != 1 else ''}: the folder {folder} is missing ✿",
+                     "missingText", wrap=True)
+        row.addWidget(text, 1)
+        find = set_icon(QPushButton(" Find folder"), "folder")
+        find.setToolTip("Moved or renamed it? Show me where it is now")
+        find.clicked.connect(lambda: self._find_folder(key, folder))
+        row.addWidget(find)
+        forget = QPushButton("Forget them", objectName="link")
+        forget.setCursor(Qt.PointingHandCursor)
+        forget.setToolTip("Stop counting these files, so you can download them again")
+        forget.clicked.connect(lambda: (self.history.forget_folder(key, folder), self.refresh()))
+        row.addWidget(forget)
+        return frame
+
+    def _find_folder(self, key: str, folder: Path) -> None:
+        start = next((p for p in folder.parents if p.is_dir()), Path.home())
+        chosen = QFileDialog.getExistingDirectory(self.window(), f"Where is {folder.name} now?", str(start))
+        logger.info("find folder for %s picked: %r", folder, chosen)
+        if not chosen:
+            return
+        if self.history.relocate(key, folder, Path(chosen)):
+            self.refresh()
+        else:
+            QMessageBox.information(self, "Not there", f"None of the files from {folder.name} are in {chosen} ✿\n\n"
+                                    "Pick the folder that has the files themselves in it.")
 
     def _read(self, key: str) -> None:
         path = PickFile.ask(self, self.history, key, "Read")
