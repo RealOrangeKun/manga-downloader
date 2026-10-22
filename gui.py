@@ -13,6 +13,7 @@ import re
 import sys
 import threading
 import time
+import zipfile
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date, datetime
 from pathlib import Path
@@ -20,7 +21,7 @@ from pathlib import Path
 import requests
 import segno
 from PySide6.QtCore import QBuffer, QCoreApplication, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QGuiApplication, QImage, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
 from PySide6.QtWidgets import (
     QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QApplication, QStyledItemDelegate, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGraphicsDropShadowEffect, QGridLayout, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView,
@@ -32,6 +33,7 @@ import appmenu
 import core
 import paths
 import phone
+import reader
 import theme
 import updater
 from history import History, ago, chapter_key
@@ -99,6 +101,7 @@ class Settings:
     results_size: int = 1  # index into ResultItem.SIZES
     seen_version: str = ""  # the version last opened, to show What's new once after an update
     sent_to_phone: bool = False  # anything sent to a phone yet (until then it mentions the Windows firewall prompt)
+    read_rtl: bool = False  # the reader turns pages right to left, like a printed manga
 
     @staticmethod
     def path() -> Path:
@@ -2319,6 +2322,340 @@ class SettingsPage(QWidget):
 # --------------------------------------------------------------------------- window
 
 
+def short_name(path: Path, title: str) -> str:
+    """A file's name without the manga title in front ("Vol. 03.cbz"), since that's shown next to it anyway."""
+    prefix = core.safe_name(title) + " - "
+    return path.name[len(prefix):] if title and path.name.startswith(prefix) else path.name
+
+
+def read_state(r: dict) -> str:
+    """What happened to a file before: read here (and how far) and/or opened in another app."""
+    parts = []
+    if r.get("read"):
+        page, pages = r.get("page", 0) + 1, r.get("pages", 0)
+        parts.append(f"Finished {ago(r['read'])} ✦" if pages and page >= pages
+                     else f"Read {ago(r['read'])}, page {page} of {pages}")
+    if r.get("opened"):
+        parts.append(f"Opened {ago(r['opened'])}")
+    return "  ·  ".join(parts)
+
+
+class PickRow(QFrame):
+    clicked = Signal()
+    double_clicked = Signal()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.double_clicked.emit()
+
+
+class PickFile(QDialog):
+    """Asks which of a manga's files to read or open, and shows which ones were read or opened before."""
+
+    def __init__(self, parent: QWidget, history: History, key: str, verb: str):
+        super().__init__(parent, objectName="pickFile")
+        self.files = history.by_chapter(key)
+        reads = history.reads(key)
+        last = history.last_read(key)
+        self.chosen = last[0] if last else (self.files[0] if self.files else None)
+        title = (history.get(key) or {}).get("title", "")
+        self.setWindowTitle(f"{verb} {title}")
+        self.setMinimumWidth(560)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(28, 22, 28, 22)
+        outer.setSpacing(6)
+        outer.addWidget(label(f"{verb} which one? ✦", "h1"), 0, Qt.AlignHCenter)
+        sub = label(title, "hint", wrap=True)
+        sub.setAlignment(Qt.AlignCenter)
+        outer.addWidget(sub)
+        outer.addSpacing(10)
+
+        rows = QWidget()
+        col = QVBoxLayout(rows)
+        col.setContentsMargins(0, 0, 8, 0)
+        col.setSpacing(6)
+        self.rows: dict[Path, PickRow] = {}
+        for f in self.files:
+            row = PickRow(objectName="pickRow")
+            row.setCursor(Qt.PointingHandCursor)
+            box = QHBoxLayout(row)
+            box.setContentsMargins(14, 9, 14, 9)
+            text = QVBoxLayout()
+            text.setSpacing(2)
+            text.addWidget(label(short_name(f, title), "pickName", wrap=True))
+            state = read_state(reads.get(str(f), {}))
+            state_lbl = label(state or "Not opened yet", "pickState", wrap=True)
+            state_lbl.setProperty("fresh", not state)
+            text.addWidget(state_lbl)
+            box.addLayout(text, 1)
+            if last and f == last[0]:
+                box.addWidget(label("Last time ✦", "newBadge"), 0, Qt.AlignVCenter)
+            row.clicked.connect(lambda f=f: self._pick(f))
+            row.double_clicked.connect(lambda f=f: (self._pick(f), self.accept()))
+            self.rows[f] = row
+            col.addWidget(row)
+        col.addStretch(1)
+        self.scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setWidget(rows)
+        self.scroll.setMinimumHeight(min(380, 68 * len(self.files) + 10))
+        outer.addWidget(self.scroll, 1)
+
+        outer.addSpacing(10)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        buttons.addWidget(cancel)
+        go = set_icon(QPushButton(f" {verb}", objectName="primary"), "book" if verb == "Read" else "external", "white")
+        go.setDefault(True)
+        go.clicked.connect(self.accept)
+        buttons.addWidget(go)
+        outer.addLayout(buttons)
+        self._pick(self.chosen)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.chosen in self.rows:
+            QTimer.singleShot(0, lambda: self.scroll.ensureWidgetVisible(self.rows[self.chosen]))
+
+    def _pick(self, f: Path | None) -> None:
+        self.chosen = f
+        for path, row in self.rows.items():
+            row.setProperty("picked", path == f)
+            repolish(row)
+
+    @classmethod
+    def ask(cls, parent: QWidget, history: History, key: str, verb: str) -> Path | None:
+        dialog = cls(parent, history, key, verb)
+        return dialog.chosen if dialog.exec() == QDialog.Accepted else None
+
+
+class Reader(QWidget):
+    """Reads a downloaded file inside the app, one page at a time, and remembers where you stopped."""
+    closed = Signal(str)  # the manga's key
+
+    CACHE = 6  # pages kept loaded
+    STRIP = 2.2  # pages this many times taller than wide are webtoon strips: shown full width and scrolled
+
+    def __init__(self, parent: QWidget, settings: Settings, history: History, key: str, path: Path):
+        super().__init__(parent, Qt.Window)
+        self.setObjectName("reader")
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.settings, self.history, self.key, self.path = settings, history, key, path
+        self.book = reader.Book(path)
+        if not len(self.book):
+            self.book.close()
+            raise OSError(f"No pages found in {path.name}")
+        saved = history.reads(key).get(str(path), {})
+        finished = saved.get("page", 0) >= len(self.book) - 1
+        self.page = saved.get("page", 0) if saved.get("read") and not finished else 0  # finished ones start over
+        self.cache: dict[int, QImage] = {}
+        self.fit_width: bool | None = None  # None: whole page, or full width for strips
+        self.wheel = 0
+        title = (history.get(key) or {}).get("title", "")
+        self.setWindowTitle(f"{title} · {path.stem}" if title else path.stem)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.bar = QFrame(objectName="readerBar")
+        top = QHBoxLayout(self.bar)
+        top.setContentsMargins(18, 8, 18, 8)
+        top.setSpacing(8)
+        name = label(path.stem, "readerTitle")
+        name.setToolTip(str(path))
+        name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)  # long names get cut, not the buttons
+        top.addWidget(name, 1)
+        self.left_btn = set_icon(QPushButton(objectName="pager"), "left")
+        self.left_btn.clicked.connect(lambda: self.step(-1))
+        top.addWidget(self.left_btn)
+        self.page_box = spin(minimum=1, maximum=len(self.book))
+        self.page_box.setKeyboardTracking(False)
+        self.page_box.valueChanged.connect(lambda v: self.go(v - 1))
+        top.addWidget(self.page_box)
+        top.addWidget(label(f"of {len(self.book)}", "meta"))
+        self.right_btn = set_icon(QPushButton(objectName="pager"), "right")
+        self.right_btn.clicked.connect(lambda: self.step(1))
+        top.addWidget(self.right_btn)
+        top.addSpacing(10)
+        self.fit_btn = QPushButton()
+        self.fit_btn.setToolTip("Show the whole page, or fill the width and scroll")
+        self.fit_btn.clicked.connect(self._toggle_fit)
+        top.addWidget(self.fit_btn)
+        self.dir_btn = QPushButton()
+        self.dir_btn.setToolTip("Which way the pages turn. Printed manga goes right to left ✿")
+        self.dir_btn.clicked.connect(self._toggle_direction)
+        top.addWidget(self.dir_btn)
+        full = set_icon(QPushButton(), "expand")
+        full.setToolTip("Full screen (F11). Esc leaves it")
+        full.clicked.connect(self._toggle_full)
+        top.addWidget(full)
+        outer.addWidget(self.bar)
+
+        self.view = QScrollArea(objectName="readerView", widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.picture = QLabel(alignment=Qt.AlignCenter)
+        self.view.setWidget(self.picture)
+        self.view.viewport().installEventFilter(self)
+        self.view.setFocusPolicy(Qt.NoFocus)
+        outer.addWidget(self.view, 1)
+        self.redraw = QTimer(self, singleShot=True, interval=60)  # resizing: draw once it settles
+        self.redraw.timeout.connect(self._show)
+
+        self._label_direction()
+        size = parent.window().size() if parent else QSize(1100, 800)
+        self.resize(max(900, size.width()), max(700, size.height()))
+        self.setFocus()
+
+    # ---- pages
+
+    def _image(self, i: int) -> QImage:
+        if i not in self.cache:
+            try:
+                self.cache[i] = self.book.image(i)
+            except (OSError, KeyError, ValueError):
+                self.cache[i] = QImage()
+            while len(self.cache) > self.CACHE:
+                self.cache.pop(max(self.cache, key=lambda p: abs(p - self.page)))
+        return self.cache[i]
+
+    def _strip(self, img: QImage) -> bool:
+        return self.fit_width if self.fit_width is not None else img.height() > img.width() * self.STRIP
+
+    def _show(self) -> None:
+        img = self._image(self.page)
+        if img.isNull():
+            self.picture.setPixmap(QPixmap())
+            self.picture.setText("This page couldn't be loaded ✿")
+            return
+        dpr = self.devicePixelRatioF()
+        vp = self.view.viewport().size()
+        if self._strip(img):
+            width = min(vp.width(), 1100)
+            if img.height() * width / img.width() > vp.height():
+                width = min(width, vp.width() - self.view.verticalScrollBar().sizeHint().width())
+            scaled = img.scaledToWidth(round(width * dpr), Qt.SmoothTransformation)
+        else:
+            scaled = img.scaled(vp * dpr, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        pix = QPixmap.fromImage(scaled)
+        pix.setDevicePixelRatio(dpr)
+        self.picture.setPixmap(pix)
+        self.fit_btn.setText("Whole page" if self._strip(img) else "Fit width")
+        self.page_box.blockSignals(True)
+        self.page_box.setValue(self.page + 1)
+        self.page_box.blockSignals(False)
+        QTimer.singleShot(0, lambda: self._image(min(self.page + 1, len(self.book) - 1)))  # have the next one ready
+
+    def go(self, i: int, at_end: bool = False) -> None:
+        i = max(0, min(len(self.book) - 1, i))
+        if i == self.page and self.picture.pixmap() and not self.picture.pixmap().isNull():
+            return
+        self.page = i
+        self._show()
+        bar = self.view.verticalScrollBar()
+        QTimer.singleShot(0, lambda: bar.setValue(bar.maximum() if at_end else 0))
+        self.history.log_read(self.key, self.path, self.page, len(self.book))
+
+    def next(self, by: int = 1, at_end: bool = False) -> None:
+        self.go(self.page + by, at_end)
+
+    def step(self, side: int) -> None:
+        """A turn towards the left (-1) or right (+1) of the screen; which way that is depends on the direction."""
+        self.next(-side if self.settings.read_rtl else side)
+
+    # ---- controls
+
+    def _label_direction(self) -> None:
+        rtl = self.settings.read_rtl
+        self.dir_btn.setText("Right to left" if rtl else "Left to right")
+        self.left_btn.setToolTip("Next page" if rtl else "Previous page")
+        self.right_btn.setToolTip("Previous page" if rtl else "Next page")
+
+    def _toggle_direction(self) -> None:
+        self.settings.read_rtl = not self.settings.read_rtl
+        self.settings.save()
+        self._label_direction()
+
+    def _toggle_fit(self) -> None:
+        self.fit_width = not self._strip(self._image(self.page))
+        self._show()
+
+    def _toggle_full(self) -> None:
+        self.showNormal() if self.isFullScreen() else self.showFullScreen()
+
+    def keyPressEvent(self, event) -> None:
+        k = event.key()
+        bar = self.view.verticalScrollBar()
+        if k == Qt.Key_Left:
+            self.step(-1)
+        elif k == Qt.Key_Right:
+            self.step(1)
+        elif k in (Qt.Key_Space, Qt.Key_PageDown, Qt.Key_Down) and bar.value() < bar.maximum():
+            bar.setValue(bar.value() + (bar.pageStep() if k != Qt.Key_Down else bar.singleStep() * 3))
+        elif k in (Qt.Key_PageUp, Qt.Key_Up) and bar.value() > 0:
+            bar.setValue(bar.value() - (bar.pageStep() if k == Qt.Key_PageUp else bar.singleStep() * 3))
+        elif k in (Qt.Key_Space, Qt.Key_PageDown, Qt.Key_Down):
+            self.next()
+        elif k in (Qt.Key_PageUp, Qt.Key_Up, Qt.Key_Backspace):
+            self.next(-1, at_end=True)
+        elif k == Qt.Key_Home:
+            self.go(0)
+        elif k == Qt.Key_End:
+            self.go(len(self.book) - 1)
+        elif k in (Qt.Key_F11, Qt.Key_F):
+            self._toggle_full()
+        elif k == Qt.Key_Escape:
+            self.showNormal() if self.isFullScreen() else self.close()
+        else:
+            super().keyPressEvent(event)
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self.view.viewport():
+            if event.type() == QEvent.Wheel:
+                return self._wheel(event)
+            if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
+                # Tap the left or right third of the page to turn it, like a reader app.
+                x, w = event.position().x(), obj.width()
+                if x < w / 3:
+                    self.step(-1)
+                elif x > w * 2 / 3:
+                    self.step(1)
+                self.setFocus()
+                return True
+            if event.type() == QEvent.Resize:
+                self.redraw.start()
+        return super().eventFilter(obj, event)
+
+    def _wheel(self, event) -> bool:
+        """The wheel scrolls a tall page, and turns the page once there's nothing left to scroll."""
+        bar = self.view.verticalScrollBar()
+        dy = event.angleDelta().y()
+        if (dy < 0 and bar.value() < bar.maximum()) or (dy > 0 and bar.value() > 0):
+            self.wheel = 0
+            return False
+        self.wheel += dy
+        if abs(self.wheel) >= 120:
+            self.next(-1 if self.wheel > 0 else 1, at_end=self.wheel > 0)
+            self.wheel = 0
+        return True
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self._show)
+
+    def closeEvent(self, event) -> None:
+        self.history.log_read(self.key, self.path, self.page, len(self.book))
+        self.book.close()
+        self.closed.emit(self.key)
+        super().closeEvent(event)
+
+
 class LibraryBridge(QObject):
     checked = Signal(str, int, str, list)  # key, total chapters, status, chapter keys
     check_failed = Signal(str)
@@ -2438,6 +2775,16 @@ class LibraryPage(QWidget):
         col.addWidget(when)
 
         buttons = QHBoxLayout()
+        has_files = bool(self.history.files(key))
+        read_btn = set_icon(QPushButton(" Read"), "book")
+        read_btn.setToolTip("Read it here in Nyanga ✦" if has_files else "Nothing downloaded yet ✦")
+        read_btn.clicked.connect(lambda: self._read(key))
+        open_file = set_icon(QPushButton(" Open"), "external")
+        open_file.setToolTip("Open a file in your usual reader app" if has_files else "Nothing downloaded yet ✦")
+        open_file.clicked.connect(lambda: self._open_file(key))
+        for b in (read_btn, open_file):
+            b.setEnabled(has_files)
+            buttons.addWidget(b)
         buttons.addStretch(1)
         pending, failed = entry.get("pending", []), entry.get("failed", [])
         url = entry.get("url", "")
@@ -2461,12 +2808,12 @@ class LibraryPage(QWidget):
         folder_btn.clicked.connect(lambda: self._open_folder(key))
         buttons.addWidget(folder_btn)
         phone_btn = set_icon(QPushButton(" Phone"), "phone")
-        phone_btn.setEnabled(bool(self.history.files(key)))
+        phone_btn.setEnabled(has_files)
         phone_btn.setToolTip("Send the files to your phone over Wi‑Fi ✦" if phone_btn.isEnabled()
                              else "Nothing downloaded yet ✦")
         phone_btn.clicked.connect(lambda: self._send_to_phone(key))
         buttons.addWidget(phone_btn)
-        open_btn = set_icon(QPushButton(" Open"), "library")
+        open_btn = set_icon(QPushButton(" Chapters"), "library")
         open_btn.setToolTip("Open it on the Download page to pick more chapters")
         open_btn.clicked.connect(lambda: self.open_requested.emit(url, "open"))
         buttons.addWidget(open_btn)
@@ -2494,6 +2841,33 @@ class LibraryPage(QWidget):
         else:
             self.refresh()  # it was moved or deleted; the button turns grey
 
+    def _read(self, key: str) -> None:
+        path = PickFile.ask(self, self.history, key, "Read")
+        if not path:
+            return
+        if not path.exists():
+            self.refresh()  # moved or deleted since
+            return
+        try:
+            book = Reader(self, self.settings, self.history, key, path)
+        except (OSError, ValueError, zipfile.BadZipFile) as e:
+            QMessageBox.warning(self, "Couldn't read it", f"{path.name} couldn't be opened ✿\n\n{e}")
+            return
+        book.closed.connect(self._fill)
+        book.show()
+        self.history.log_read(key, path, book.page, len(book.book))
+        self._fill(key)
+
+    def _open_file(self, key: str) -> None:
+        path = PickFile.ask(self, self.history, key, "Open")
+        if not path:
+            return
+        if path.exists() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+            self.history.log_opened(key, path)
+            self._fill(key)
+        elif not path.exists():
+            self.refresh()
+
     def _send_to_phone(self, key: str) -> None:
         files = self.history.files(key)
         if files:
@@ -2517,7 +2891,15 @@ class LibraryPage(QWidget):
         if entry.get("status"):
             parts.append(entry["status"])
         w["meta"].setText("  ·  ".join(parts))
-        w["when"].setText(f"Last download: {ago(entry.get('last_download'))}")
+        when = f"Last download: {ago(entry.get('last_download'))}"
+        last = self.history.last_read(key)
+        if last:
+            path, r = last
+            state = read_state({k: v for k, v in r.items() if k != "opened"}) if r.get("read", 0) >= r.get("opened", 0) \
+                else f"Opened {ago(r['opened'])}"
+            name = Path(short_name(path, entry.get("title", ""))).stem if path.is_file() else path.name
+            when += f"  ·  {name}: {state[0].lower()}{state[1:]}"
+        w["when"].setText(when)
         new = entry.get("new_chapters", 0)
         w["badge"].setText(f"{new} new ✦")
         w["badge"].setVisible(bool(new))

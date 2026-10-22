@@ -54,6 +54,8 @@
 - 💾 **Picks up where it stopped**: cancel, close, come back later; finished files are skipped.
 - 🗂️ **A Library**: every manga you've downloaded, how much of the series you have, and a "new"
   badge when chapters come out.
+- 📖 **A reader built in**: read your downloads right in Nyanga, and it remembers the page you
+  stopped on.
 - 📱 **Send to your phone**: scan a QR code with your phone's camera and save the files straight
   from its browser, over your home Wi‑Fi. Nothing to install on the phone.
 - 🌙 **Light and dark**, or follow your system.
@@ -190,11 +192,19 @@ and **Remove from library** to take it off again.
 Each one gets a card with its cover, how much of the series you have (chapters downloaded out
 of all chapters on the site), and what failed or is still waiting.
 
+- **Read** asks which file, then opens it in Nyanga's own reader (CBZ, PDF, EPUB or an image
+  folder). It starts where you left off. Turn pages with the arrow keys, the mouse wheel or by
+  clicking the left or right side of the page. **Left to right** switches to right to left for
+  manga read like the printed book, **Fit width** fills the window for long strips, and F11 is
+  full screen.
+- **Open** asks which file, then opens it in your computer's usual app for that kind of file.
+- Both show which files you've read or opened before, and how far you got, with the last one
+  already picked. The card also shows the last one.
 - **Continue** picks up chapters from a download that was cancelled or interrupted.
 - **Retry failed** downloads the chapters that failed again.
 - **Folder** opens the folder with that manga's downloaded files.
 - **Phone** sends that manga's files to your phone (see below).
-- **Open** loads the manga on the Download page with what you already have marked, so you can
+- **Chapters** loads the manga on the Download page with what you already have marked, so you can
   pick more.
 - Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
   a "new" badge.

@@ -135,6 +135,17 @@ QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selec
 QFrame#toast { background: $chip; border-radius: 13px; }
 QDialog#whatsNew, QDialog#sendPhone { background: $bg; }
 QFrame#phoneFile { background: $card; border: 1px solid $border; border-radius: 14px; }
+QDialog#pickFile { background: $bg; }
+QFrame#pickRow { background: $card; border: 2px solid $border; border-radius: 14px; }
+QFrame#pickRow:hover { border-color: $chunk_a; }
+QFrame#pickRow[picked="true"] { border-color: $primary_b; background: $selection; }
+QLabel#pickName { font-size: 14px; font-weight: 600; background: transparent; }
+QLabel#pickState { color: $muted; font-size: 12px; background: transparent; }
+QLabel#pickState[fresh="true"] { color: $accent; font-weight: 600; }
+QWidget#reader { background: $bg; }
+QFrame#readerBar { background: $card; border-bottom: 1px solid $border; }
+QScrollArea#readerView, QScrollArea#readerView > QWidget > QWidget { background: $header; }
+QLabel#readerTitle { font-size: 15px; font-weight: 700; }
 QFrame#qrCard { background: #ffffff; border-radius: 18px; }
 QLabel#address { color: $muted; font-size: 12px; }
 QLabel#phoneSent { color: $ok; font-weight: 600; font-size: 12px; }
@@ -288,6 +299,17 @@ _ICONS = {
             '<circle cx="5" cy="17" r="1.4" fill="COLOR"/>',
     "phone": '<rect x="6.5" y="2.8" width="11" height="18.4" rx="2.8" fill="none" stroke="COLOR" stroke-width="2.2"/>'
              '<path d="M10.6 17.4h2.8" stroke="COLOR" stroke-width="2.2" stroke-linecap="round"/>',
+    "book": '<path d="M12 6.8C10.2 5.4 7.4 4.9 3.8 5.2v12.6c3.6-.3 6.4.2 8.2 1.6 1.8-1.4 4.6-1.9 8.2-1.6V5.2'
+            'c-3.6-.3-6.4.2-8.2 1.6zM12 6.8v12.6" fill="none" stroke="COLOR" stroke-width="2.1" stroke-linejoin="round"/>',
+    "external": '<path d="M10.5 5.5H7.2a2.7 2.7 0 0 0-2.7 2.7v8.6a2.7 2.7 0 0 0 2.7 2.7h8.6a2.7 2.7 0 0 0 2.7-2.7'
+                'v-3.3" fill="none" stroke="COLOR" stroke-width="2.3" stroke-linecap="round"/><path d="M13.5 4.5h6v6M19.3 '
+                '4.7l-7.8 7.8" fill="none" stroke="COLOR" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>',
+    "left": '<path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="COLOR" stroke-width="2.6" stroke-linecap="round" '
+            'stroke-linejoin="round"/>',
+    "right": '<path d="M9.5 5.5L16 12l-6.5 6.5" fill="none" stroke="COLOR" stroke-width="2.6" stroke-linecap="round" '
+             'stroke-linejoin="round"/>',
+    "expand": '<path d="M4.5 9.5v-5h5M19.5 9.5v-5h-5M4.5 14.5v5h5M19.5 14.5v5h-5" fill="none" stroke="COLOR" '
+              'stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>',
 }
 
 # The app's mascot: a happy cat face (the same cat as in loader.py) with a heart. Drawn for this app.

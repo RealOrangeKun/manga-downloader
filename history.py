@@ -57,6 +57,22 @@ class History:
     def cover_path(self, key: str) -> Path:
         return self.folder / "covers" / (re.sub(r"[^a-z0-9_.-]+", "_", key.lower()) + ".img")
 
+    def by_chapter(self, key: str) -> list[Path]:
+        """The files that are still there, in chapter order (file names like "Ch. 101-110" don't sort)."""
+        first: dict[Path, float] = {}
+        for c, f in self.data.get(key, {}).get("downloaded", {}).items():
+            first[Path(f)] = min(first.get(Path(f), float("inf")), float(c))
+        return sorted((f for f in first if f.exists()), key=lambda f: (first[f], f.name))
+
+    def reads(self, key: str) -> dict[str, dict]:
+        """Per file: when it was last read here ("read", with "page" and "pages") or opened elsewhere ("opened")."""
+        return self.data.get(key, {}).get("reads", {})
+
+    def last_read(self, key: str) -> tuple[Path, dict] | None:
+        """The file read or opened most recently, if it's still there."""
+        done = [(Path(f), r) for f, r in self.reads(key).items() if Path(f).exists()]
+        return max(done, key=lambda fr: max(fr[1].get("read", 0), fr[1].get("opened", 0)), default=None)
+
     @staticmethod
     def percent(entry: dict) -> float:
         total = entry.get("total_chapters") or 0
@@ -108,6 +124,15 @@ class History:
         entry["failed"] = sorted(set(entry["failed"]) | bad, key=float)
         self.save()
 
+    def log_read(self, key: str, path: Path, page: int, pages: int) -> None:
+        """Remember where the reader is in a file, so it can carry on from there."""
+        self.data[key].setdefault("reads", {}).setdefault(str(path), {}).update(read=time.time(), page=page, pages=pages)
+        self.save()
+
+    def log_opened(self, key: str, path: Path) -> None:
+        self.data[key].setdefault("reads", {}).setdefault(str(path), {})["opened"] = time.time()
+        self.save()
+
     def checked(self, key: str, total: int, status: str, chapters: list[str]) -> int:
         """Record a background check of the site; returns how many chapters are new."""
         entry = self.data[key]
@@ -125,6 +150,10 @@ class History:
             for c in gone:
                 del entry["downloaded"][c]
             changed |= bool(gone)
+            stale = [f for f in entry.get("reads", {}) if not Path(f).exists()]
+            for f in stale:
+                del entry["reads"][f]
+            changed |= bool(stale)
         if changed:
             self.save()
 

@@ -15,8 +15,9 @@ a = Analysis(
     + ([(str(ROOT / "whats_new.json"), ".")] if (ROOT / "whats_new.json").exists() else []),
     excludes=["tkinter"],
 )
-# Qt plugins drag in QML, Quick, the virtual keyboard and PDF; the app uses none of them.
-UNUSED = ("qml", "quick", "virtualkeyboard", "qt6pdf", "qpdf", "translations")
+# Qt plugins drag in QML, Quick and the virtual keyboard; the app uses none of them.
+# (Qt PDF stays: the reader draws PDF pages with it. Its Quick part goes with "quick".)
+UNUSED = ("qml", "quick", "virtualkeyboard", "translations")
 a.binaries = [b for b in a.binaries if not any(u in b[0].lower() for u in UNUSED)]
 a.datas = [d for d in a.datas if not any(u in d[0].lower() for u in UNUSED)]
 pyz = PYZ(a.pure)
