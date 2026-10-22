@@ -142,6 +142,22 @@ class Bridge(QObject):
     estimated = Signal(object, object)  # MangaInfo, average bytes per chapter (or None)
 
 
+class Tap(QObject):
+    """Calls `fn` when the widget is clicked (pressed and released on it), not on its buttons."""
+
+    def __init__(self, widget: QWidget, fn) -> None:
+        super().__init__(widget)
+        self.fn = fn
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease) and event.button() == Qt.LeftButton:
+            if event.type() == QEvent.MouseButtonRelease and obj.rect().contains(event.position().toPoint()):
+                self.fn()
+            return True  # taking the press too, so the release comes here
+        return False
+
+
 def card() -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame(objectName="card")
     shadow = QGraphicsDropShadowEffect(blurRadius=28, xOffset=0, yOffset=6)
@@ -2831,13 +2847,12 @@ class LibraryPage(QWidget):
                              else "Nothing downloaded yet ✦")
         phone_btn.clicked.connect(lambda: self._send_to_phone(key))
         buttons.addWidget(phone_btn)
-        open_btn = set_icon(QPushButton(" Chapters"), "library")
-        open_btn.setToolTip("Open it on the Download page to pick more chapters")
-        open_btn.clicked.connect(lambda: self.open_requested.emit(url, "open"))
-        buttons.addWidget(open_btn)
         col.addLayout(buttons)
         row.addLayout(col, 1)
         layout.addLayout(row)
+        # Tapping the card anywhere but its buttons opens it on the Download page to pick more chapters.
+        frame.setCursor(Qt.PointingHandCursor)
+        Tap(frame, lambda: self.open_requested.emit(url, "open"))
 
         self.cards[key] = {"bar": bar, "meta": meta, "when": when, "badge": badge, "cat": cat, "busy": busy,
                            "resume": resume}

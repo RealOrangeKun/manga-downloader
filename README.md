@@ -204,8 +204,8 @@ of all chapters on the site), and what failed or is still waiting.
 - **Retry failed** downloads the chapters that failed again.
 - **Folder** opens the folder with that manga's downloaded files.
 - **Phone** sends that manga's files to your phone (see below).
-- **Chapters** loads the manga on the Download page with what you already have marked, so you can
-  pick more.
+- Tap anywhere else on a card to load that manga on the Download page with what you already have
+  marked, so you can pick more.
 - Opening the page checks each manga for new chapters (at most once every 5 minutes) and shows
   a "new" badge.
 - If you delete a downloaded file (or move it out of its folder), it no longer counts as
