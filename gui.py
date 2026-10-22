@@ -999,6 +999,53 @@ class DownloadPage(QWidget):
         self.size_anim.timeout.connect(lambda: self.table.viewport().update())
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.itemChanged.connect(self._update_summary)
+        # Filter chips: which files the table shows. Ticks stay put on files a filter hides.
+        chips = QHBoxLayout()
+        chips.setSpacing(8)
+        self.filter = "all"
+        self.smart: dict[str, set[int]] = {"missing": set(), "done": set(), "new": set(), "failed": set()}
+        self.filter_chips: dict[str, QPushButton] = {}
+        chip_group = QButtonGroup(self, exclusive=True)
+        for kind, tip in (("all", "Every file"),
+                          ("missing", "Files you don't have yet (or only partly)"),
+                          ("done", "Files you already have"),
+                          ("new", "Files with chapters that came out since you last looked"),
+                          ("failed", "Files that failed last time")):
+            b = QPushButton(objectName="chip", checkable=True, checked=kind == "all")
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _=False, kind=kind: self._set_filter(kind))
+            chip_group.addButton(b)
+            chips.addWidget(b)
+            self.filter_chips[kind] = b
+        self.range_chip = set_icon(QPushButton(" Range", objectName="chip", checkable=True), "filter")
+        self.range_chip.setToolTip("Only show some volumes or chapters")
+        self.range_chip.toggled.connect(self._toggle_range)
+        chips.addWidget(self.range_chip)
+        chips.addStretch(1)
+        tl.addLayout(chips)
+
+        self.range_row = QWidget()
+        ranges = QHBoxLayout(self.range_row)
+        ranges.setContentsMargins(0, 0, 0, 0)
+        self.range_unit = combo_box()  # only when the title has both volumes and loose chapters
+        self.range_unit.addItem("Volumes", "volume")
+        self.range_unit.addItem("Chapters", "chapter")
+        self.range_unit.currentIndexChanged.connect(lambda *_: (self._range_bounds(), self._show_page(0)))
+        self.range_unit.hide()
+        ranges.addWidget(self.range_unit)
+        self.range_lbl = label("Chapters", "meta")
+        ranges.addWidget(self.range_lbl)
+        self.range_key = ""  # title the unit was last picked for
+        self.range_from = spin(minimum=0, maximum=0)
+        ranges.addWidget(self.range_from)
+        ranges.addWidget(label("to", "meta"))
+        self.range_to = spin(minimum=0, maximum=0)
+        ranges.addWidget(self.range_to)
+        for box in (self.range_from, self.range_to):
+            box.valueChanged.connect(lambda *_: self.range_chip.isChecked() and self._show_page(0))
+        ranges.addStretch(1)
+        self.range_row.hide()
+        tl.addWidget(self.range_row)
         tl.addWidget(self.table)
         self.anchor: int | None = None  # file of the last paw clicked, for shift-click
         self.drag_state: bool | None = None  # ticking or unticking while dragging across paws
@@ -1011,59 +1058,21 @@ class DownloadPage(QWidget):
         self.next_btn = QPushButton("›", objectName="pager")
         self.next_btn.setToolTip("Next page")
         self.next_btn.clicked.connect(lambda: self._show_page(self.page + 1))
-        pager = QHBoxLayout()
-        pager.addStretch(1)
-        for w in (self.prev_btn, self.page_lbl, self.next_btn):
-            pager.addWidget(w)
-        pager.addStretch(1)
-        tl.addLayout(pager)
-
-        picks = QHBoxLayout()
         self.select_btn = set_icon(QPushButton(" Select all"), "paw_outline")
+        self.select_btn.setToolTip("Tick or untick every file the filter shows")
         self.select_btn.clicked.connect(self._toggle_all)
         self.page_btn = set_icon(QPushButton(" Select page"), "list")
         self.page_btn.setToolTip("Tick or untick just the files on this page")
         self.page_btn.clicked.connect(self._toggle_page)
-        # Quick picks from the download history; each replaces the current selection.
-        self.smart: dict[str, list[int]] = {"new": [], "missing": [], "failed": []}
-        self.smart_btns = {}
-        for kind, icon, tip in (("new", "cat", "Files with chapters that came out since you last looked"),
-                                ("missing", "download", "Files you don't have yet (or only partly)"),
-                                ("failed", "refresh", "Files that failed last time")):
-            b = set_icon(QPushButton(), icon)
-            b.setToolTip(tip)
-            b.clicked.connect(lambda _=False, kind=kind: self._check(lambda i, kind=kind: i in self.smart[kind]))
-            self.smart_btns[kind] = b
-        picks.addWidget(self.select_btn)
-        picks.addWidget(self.page_btn)
-        picks.addSpacing(12)
-        for b in self.smart_btns.values():
-            picks.addWidget(b)
-        picks.addStretch(1)
-        tl.addLayout(picks)
-
-        ranges = QHBoxLayout()
-        self.range_unit = combo_box()  # only when the title has both volumes and loose chapters
-        self.range_unit.addItem("Volumes", "volume")
-        self.range_unit.addItem("Chapters", "chapter")
-        self.range_unit.currentIndexChanged.connect(lambda *_: self._range_bounds())
-        self.range_unit.hide()
-        ranges.addWidget(self.range_unit)
-        self.range_lbl = label("Chapters", "meta")
-        ranges.addWidget(self.range_lbl)
-        self.range_key = ""  # title the unit was last picked for
-        self.range_from = spin(minimum=0, maximum=0)
-        ranges.addWidget(self.range_from)
-        ranges.addWidget(label("to", "meta"))
-        self.range_to = spin(minimum=0, maximum=0)
-        ranges.addWidget(self.range_to)
-        self.range_btn = set_icon(QPushButton(" Select"), "check")
-        self.range_btn.clicked.connect(self._select_range)
-        ranges.addWidget(self.range_btn)
-        ranges.addSpacing(12)
-        ranges.addWidget(label("Shift-click a paw to tick everything in between, or drag across them ✦",
-                               "hint", wrap=True), 1)
-        tl.addLayout(ranges)
+        pager = QHBoxLayout()
+        pager.addWidget(self.select_btn)
+        pager.addWidget(self.page_btn)
+        pager.addStretch(1)
+        for w in (self.prev_btn, self.page_lbl, self.next_btn):
+            pager.addWidget(w)
+        pager.addStretch(1)
+        pager.addWidget(label("Shift-click a paw to tick everything in between, or drag ✦", "hint"))
+        tl.addLayout(pager)
         self.files_card.hide()
         col.addWidget(self.files_card)
         col.addStretch(1)
@@ -1617,21 +1626,24 @@ class DownloadPage(QWidget):
         self.order = list(range(len(self.groups)))
         self.row_of = list(self.order)
         self._apply_sort()
-        self._show_page(0)
         self.anchor = None
         has_volumes = any(c.volume != core.NO_VOLUME for c in self.info.chapters)
         has_loose = any(c.volume == core.NO_VOLUME for c in self.info.chapters)
         self.range_unit.setVisible(has_volumes and has_loose)
         self.range_lbl.setVisible(not (has_volumes and has_loose))
         self.range_lbl.setText("Chapters" if has_loose else "Volumes")
-        if self.range_key != self.key:  # a new title: volumes first when it has them
+        if self.range_key != self.key:  # a new title: volumes first when it has them, no filters
             self.range_key = self.key
             self.range_unit.blockSignals(True)
             self.range_unit.setCurrentIndex(0 if has_volumes else 1)
             self.range_unit.blockSignals(False)
+            self.filter = "all"
+            self.filter_chips["all"].setChecked(True)
+            self.range_chip.setChecked(False)
         self._range_bounds()
         self._mark_history()
         self._update_smart()
+        self._show_page(0)
         self._fill_sizes()
         self._update_summary()
 
@@ -1690,27 +1702,49 @@ class DownloadPage(QWidget):
     def _show_page(self, page: int) -> None:
         """Show one page of files; the rest stay in the table, just hidden."""
         size = self.settings.files_per_page
-        pages = max(1, -(-self.table.rowCount() // size))
+        matching = [r for r in range(self.table.rowCount()) if self._matches(self.order[r])]
+        pages = max(1, -(-len(matching) // size))
         self.page = min(max(0, page), pages - 1)
         first = self.page * size
-        shown = range(first, min(first + size, self.table.rowCount()))
+        shown = set(matching[first:first + size])
         for i in range(self.table.rowCount()):
             self.table.setRowHidden(i, i not in shown)
         last = first + len(shown)
-        self.page_lbl.setText(f"Page {self.page + 1} of {pages}  ·  files {first + 1}–{last}")
+        self.page_lbl.setText(f"Page {self.page + 1} of {pages}  ·  files {first + 1}–{last}" if matching
+                              else "No files here ✦")
         self.prev_btn.setEnabled(self.page > 0)
         self.next_btn.setEnabled(self.page < pages - 1)
-        for w in (self.prev_btn, self.page_lbl, self.next_btn):
+        for w in (self.prev_btn, self.next_btn):
             w.setVisible(pages > 1)
+        self.page_lbl.setVisible(pages > 1 or not matching)
         # Fit the shown rows exactly; the page itself scrolls, so the table never needs its own scrollbar.
         rows_h = sum(self.table.rowHeight(i) for i in shown)
         self.table.setFixedHeight(self.table.horizontalHeader().height() + rows_h + 4)
         if self.groups:
             self._update_summary()  # the Select page button follows the page
 
+    def _matches(self, row: int) -> bool:
+        """Whether file `row` passes the filter chips."""
+        if self.filter != "all" and row not in self.smart[self.filter]:
+            return False
+        return not self.range_chip.isChecked() or self._in_range(row)
+
+    def _filtered(self) -> list[int]:
+        return [i for i in range(len(self.groups)) if self._matches(i)]
+
+    def _set_filter(self, kind: str) -> None:
+        self.filter = kind
+        self.filter_chips[kind].setChecked(True)
+        self._show_page(0)
+
+    def _toggle_range(self, on: bool) -> None:
+        self.range_row.setVisible(on)
+        if self.groups:
+            self._show_page(0)
+
     def _toggle_all(self) -> None:
-        everything = len(self._checked_rows()) == self.table.rowCount()
-        self._check(lambda i: not everything)
+        files = self._filtered()
+        self._set_checks(files, not all(self._ticked(i) for i in files))
 
     def _page_files(self) -> list[int]:
         return [self.order[r] for r in range(self.table.rowCount()) if not self.table.isRowHidden(r)]
@@ -1722,7 +1756,7 @@ class DownloadPage(QWidget):
     def _by_volume(self) -> bool:
         if not self.info:
             return False
-        if self.range_unit.isVisibleTo(self):
+        if not self.range_unit.isHidden():  # its own flag: the Range row may be folded away
             return self.range_unit.currentData() == "volume"
         return all(c.volume != core.NO_VOLUME for c in self.info.chapters)
 
@@ -1747,19 +1781,14 @@ class DownloadPage(QWidget):
             range_tip(box)
         self.range_from.setValue(self.range_from.minimum())
         self.range_to.setValue(self.range_to.maximum())
-        unit = "volumes" if self._by_volume() else "chapters"
-        self.range_btn.setToolTip(f"Tick every file with {unit} in this range")
 
-    def _select_range(self) -> None:
+    def _in_range(self, row: int) -> bool:
         low, high = sorted((self.range_from.value(), self.range_to.value()))
         if self._by_volume():
-            self._check(lambda i: any(c.volume != core.NO_VOLUME and low <= c.volume <= high
-                                      for c in self.groups[i].chapters))
-        else:
-            # Only chapters without a volume (those are picked by volume); high + 1 so "to 10"
-            # includes 10.5; a file counts if any of its chapters is in the range.
-            self._check(lambda i: any(c.volume == core.NO_VOLUME and low <= c.number < high + 1
-                                      for c in self.groups[i].chapters))
+            return any(c.volume != core.NO_VOLUME and low <= c.volume <= high for c in self.groups[row].chapters)
+        # Only chapters without a volume (those are picked by volume); high + 1 so "to 10"
+        # includes 10.5; a file counts if any of its chapters is in the range.
+        return any(c.volume == core.NO_VOLUME and low <= c.number < high + 1 for c in self.groups[row].chapters)
 
     def _ticked(self, row: int) -> bool:
         return self._item(row, 0).checkState() == Qt.Checked
@@ -1794,7 +1823,8 @@ class DownloadPage(QWidget):
             file = self.order[row]
             if event.modifiers() & Qt.ShiftModifier and self.anchor is not None:
                 low, high = sorted((self.row_of[self.anchor], row))
-                self._set_checks([self.order[r] for r in range(low, high + 1)], self._ticked(self.anchor))
+                self._set_checks([self.order[r] for r in range(low, high + 1) if self._matches(self.order[r])],
+                                 self._ticked(self.anchor))
             else:
                 self.drag_state = not self._ticked(file)
                 self.anchor = file
@@ -1811,21 +1841,26 @@ class DownloadPage(QWidget):
         return super().eventFilter(obj, event)
 
     def _update_smart(self) -> None:
-        """Counts for the New / Not downloaded / Failed quick picks."""
+        """Which files each filter chip shows, and the counts on the chips."""
         entry = self.history.get(self.key) or {}
         downloaded, failed = entry.get("downloaded", {}), set(entry.get("failed", []))
-        self.smart = {"new": [], "missing": [], "failed": []}
+        self.smart = {"missing": set(), "done": set(), "new": set(), "failed": set()}
         for i, g in enumerate(self.groups):
             keys = group_keys(g)
+            self.smart["done" if all(k in downloaded for k in keys) else "missing"].add(i)
             if self.new_keys & set(keys):
-                self.smart["new"].append(i)
-            if not all(k in downloaded for k in keys):
-                self.smart["missing"].append(i)
+                self.smart["new"].add(i)
             if failed & set(keys):
-                self.smart["failed"].append(i)
-        for kind, name in (("new", "New ✦"), ("missing", "Not downloaded"), ("failed", "Failed")):
-            self.smart_btns[kind].setText(f" {name} ({len(self.smart[kind])})")
-            self.smart_btns[kind].setEnabled(bool(self.smart[kind]) and not self.running)
+                self.smart["failed"].add(i)
+        counts = {"all": len(self.groups), **{k: len(v) for k, v in self.smart.items()}}
+        for kind, name in (("all", "All"), ("missing", "Not downloaded"), ("done", "Downloaded"),
+                           ("new", "New ✦"), ("failed", "Failed")):
+            self.filter_chips[kind].setText(f"{name}  {counts[kind]}")
+            # New and Failed only show up when there's something in them.
+            self.filter_chips[kind].setVisible(kind not in ("new", "failed") or counts[kind] > 0)
+        if self.filter != "all" and not self.filter_chips[self.filter].isVisible():
+            self.filter = "all"
+            self.filter_chips["all"].setChecked(True)
 
     def _mark_history(self) -> None:
         """Show what is already downloaded, failed last time or new, and untick finished files."""
@@ -1871,7 +1906,8 @@ class DownloadPage(QWidget):
 
     def _update_summary(self, *_) -> None:
         rows = self._checked_rows()
-        everything = bool(rows) and len(rows) == self.table.rowCount()
+        shown = self._filtered()
+        everything = bool(shown) and all(self._ticked(i) for i in shown)
         self.select_btn.setText(" Select none" if everything else " Select all")
         swap_icon(self.select_btn, "paw" if everything else "paw_outline")
         page = self._page_files()
@@ -1939,13 +1975,12 @@ class DownloadPage(QWidget):
 
     def _set_locked(self, locked: bool) -> None:
         for w in (self.source, self.query, self.fetch_btn, self.filter_btn, self.filters, self.fmt, self.per_file, self.save_to, self.select_btn,
-                  self.page_btn, self.range_unit, self.range_from, self.range_to, self.range_btn, self.lib_btn):
+                  self.page_btn, self.lib_btn):
             w.setEnabled(not locked)
-        self.table.setEnabled(True)  # paws ignore clicks while running (see eventFilter)
-        for b in self.smart_btns.values():
-            b.setEnabled(not locked)
+        self.table.setEnabled(True)  # paws ignore clicks while running (see eventFilter); filters still work
         if not locked:
             self._update_smart()
+            self._show_page(self.page)
 
     def _start(self) -> None:
         rows = self._checked_rows()

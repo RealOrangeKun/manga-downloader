@@ -165,11 +165,14 @@ closed, that spot shows the delivery cat and how far along it is:
 2. Pick the format, the folder to save to and, if the site has no volume numbers for the
    title, how many chapters go in each file.
 3. Tap the paws of the files you want. Shift-click a paw to tick everything since the last one
-   you tapped, or drag across paws to tick (or untick) a run of them. Under the table:
-   - **Select all / none**, and **Select page** for just the files on screen.
-   - **New ✦**, **Not downloaded** and **Failed** pick files from your download history.
-   - **Volumes / Chapters … to …** ticks every file in that range. Chapters that are in a volume
-     are picked by volume; **Chapters** covers the newer ones that aren't in a volume yet.
+   you tapped, or drag across paws to tick (or untick) a run of them.
+   - The chips above the table choose which files it shows: **All**, **Not downloaded**,
+     **Downloaded**, and **New ✦** or **Failed** when there are any. Each one shows how many files it has.
+   - **Range** narrows the list to some volumes or chapters. Chapters that are in a volume are
+     picked by volume; **Chapters** covers the newer ones that aren't in a volume yet.
+   - Filters only change what you see: files you ticked stay ticked when a filter hides them.
+   - Under the table, **Select all / none** ticks every file the filters show, and
+     **Select page** just the ones on screen.
 
    Long series are split into pages (20 files each, changeable in Settings); use ‹ › to flip.
    Tap a column title to sort by it: once for up, twice for down, a third time (or a
