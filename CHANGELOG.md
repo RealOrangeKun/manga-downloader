@@ -2,6 +2,14 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.15.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.15.0) (2026-10-22)
+
+### New
+- library: tapping a manga in your library now opens it on the Download page
+- downloads now show how fast they're going
+- the Download page has filters to show only the files you want
+- chapters you already have are no longer downloaded again when files are regrouped
+
 ## [1.14.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.14.0) (2026-10-22)
 
 ### New
