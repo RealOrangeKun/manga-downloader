@@ -135,7 +135,8 @@ Nyanga is then in your app menu right away. Step-by-step guides for every way ar
 ### 🎁 Updates
 
 When a new version is out, a card pops up with **Update now**. It downloads the new version,
-installs it and reopens by itself. Your settings and library are kept (they live in
+installs it and reopens by itself. On Windows and with the `.deb`/`.rpm`, only the parts of the app
+that changed get downloaded, usually a few MB. Your settings and library are kept (they live in
 `%APPDATA%\Nyanga` on Windows; on Linux the settings are in `~/.config/Nyanga` and the
 library in `~/.local/share/Nyanga`). On Linux the new version
 takes the old AppImage's place, so keep it in a folder you can write to. Installed from the

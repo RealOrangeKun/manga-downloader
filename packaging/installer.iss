@@ -40,6 +40,11 @@ Name: desktopicon; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm
 ; Old libraries go first so nothing from the previous version is left behind.
 Type: filesandordirs; Name: "{app}\_internal"
 
+[UninstallDelete]
+; Updates can add files the installer never saw (only the changed files get downloaded), so
+; uninstalling clears the whole folder.
+Type: filesandordirs; Name: "{app}"
+
 [Files]
 Source: "..\dist\Nyanga\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

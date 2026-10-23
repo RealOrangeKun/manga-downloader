@@ -1,6 +1,7 @@
 #!/bin/sh
-# Packs the app folder PyInstaller made (dist/Nyanga, from build_appimage.sh) three more ways:
-# Nyanga-linux-x86_64.tar.gz (what .deb/.rpm installs update themselves from), a .deb and an .rpm.
+# Packs the app folder PyInstaller made (dist/Nyanga, from build_appimage.sh) four more ways:
+# Nyanga-linux-x86_64.tar.gz (what .deb/.rpm installs update themselves from),
+# Nyanga-update-linux-x86_64.zip/.json (so updates fetch only the changed files), a .deb and an .rpm.
 # Run from the project folder after build_appimage.sh, with nfpm on PATH (or NFPM=/path/to/nfpm).
 # The version comes from version.py (CI writes the real one); NYANGA_VERSION overrides it.
 set -eu
@@ -17,6 +18,7 @@ echo "$VERSION" > dist/Nyanga/VERSION  # the launcher and updater compare copies
 sed -e "s/@VERSION@/$VERSION/" -e "s/@DATE@/$(date -u +%Y-%m-%d)/" \
     packaging/linux/page.nyanga.app.metainfo.xml > build/page.nyanga.app.metainfo.xml
 tar -C dist --owner=0 --group=0 --numeric-owner -czf dist/Nyanga-linux-x86_64.tar.gz Nyanga
+"$PYTHON" scripts/pack_update.py dist/Nyanga dist/Nyanga-update-linux-x86_64
 export NYANGA_VERSION="$VERSION"
 "$NFPM" package --config packaging/nfpm.yaml --packager deb --target dist/
 "$NFPM" package --config packaging/nfpm.yaml --packager rpm --target dist/

@@ -78,6 +78,10 @@ jobs:
           python scripts/make_icon.py
           pyinstaller packaging/nyanga.spec --noconfirm
 
+      # Lets installed copies update by downloading only the files that changed.
+      - name: Pack the update
+        run: python scripts/pack_update.py dist/Nyanga dist/installer/Nyanga-update-windows-x86_64
+
       - name: Build the installer
         run: |
           choco install innosetup -y --no-progress
@@ -87,7 +91,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/installer/Nyanga-Setup-${{ needs.version.outputs.version }}.exe
+          path: |
+            dist/installer/Nyanga-Setup-${{ needs.version.outputs.version }}.exe
+            dist/installer/Nyanga-update-windows-x86_64.zip
+            dist/installer/Nyanga-update-windows-x86_64.json
+          if-no-files-found: error
 
   linux:
     needs: version
@@ -131,6 +139,8 @@ jobs:
           path: |
             dist/Nyanga-x86_64.AppImage
             dist/Nyanga-linux-x86_64.tar.gz
+            dist/Nyanga-update-linux-x86_64.zip
+            dist/Nyanga-update-linux-x86_64.json
             dist/nyanga_${{ needs.version.outputs.version }}-1_amd64.deb
             dist/nyanga-${{ needs.version.outputs.version }}-1.x86_64.rpm
           if-no-files-found: error
@@ -153,6 +163,10 @@ jobs:
           out/windows/Nyanga-Setup-${{ needs.version.outputs.version }}.exe
           out/linux/Nyanga-x86_64.AppImage
           out/linux/Nyanga-linux-x86_64.tar.gz
+          out/windows/Nyanga-update-windows-x86_64.zip
+          out/windows/Nyanga-update-windows-x86_64.json
+          out/linux/Nyanga-update-linux-x86_64.zip
+          out/linux/Nyanga-update-linux-x86_64.json
           out/linux/nyanga_${{ needs.version.outputs.version }}-1_amd64.deb
           out/linux/nyanga-${{ needs.version.outputs.version }}-1.x86_64.rpm
           out/version/whats_new.json
