@@ -2,6 +2,11 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.17.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.17.0) (2026-10-23)
+
+### New
+- reader: the reader has buttons to go to the previous or next volume or chapters
+
 ## [1.16.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.16.0) (2026-10-23)
 
 ### New
