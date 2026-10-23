@@ -2545,18 +2545,11 @@ class Reader(QWidget):
         self.setObjectName("reader")
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.settings, self.history, self.key, self.path = settings, history, key, path
-        self.book = reader.Book(path)
-        if not len(self.book):
-            self.book.close()
-            raise OSError(f"No pages found in {path.name}")
-        saved = history.reads(key).get(str(path), {})
-        finished = saved.get("page", 0) >= len(self.book) - 1
-        self.page = saved.get("page", 0) if saved.get("read") and not finished else 0  # finished ones start over
+        self.book = self._open_book(path)
+        self.page = self._start_page()
         self.cache: dict[int, QImage] = {}
         self.fit_width: bool | None = None  # None: whole page, or full width for strips
         self.wheel = 0
-        title = (history.get(key) or {}).get("title", "")
-        self.setWindowTitle(f"{title} · {path.stem}" if title else path.stem)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -2565,10 +2558,12 @@ class Reader(QWidget):
         top = QHBoxLayout(self.bar)
         top.setContentsMargins(18, 8, 18, 8)
         top.setSpacing(8)
-        name = label(path.stem, "readerTitle")
-        name.setToolTip(str(path))
-        name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)  # long names get cut, not the buttons
-        top.addWidget(name, 1)
+        self.name = label("", "readerTitle")
+        self.name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)  # long names get cut, not the buttons
+        top.addWidget(self.name, 1)
+        self.prev_file = QPushButton()
+        self.prev_file.clicked.connect(lambda: self.switch(-1))
+        top.addWidget(self.prev_file)
         self.left_btn = set_icon(QPushButton(objectName="pager"), "left")
         self.left_btn.clicked.connect(lambda: self.step(-1))
         top.addWidget(self.left_btn)
@@ -2576,10 +2571,14 @@ class Reader(QWidget):
         self.page_box.setKeyboardTracking(False)
         self.page_box.valueChanged.connect(lambda v: self.go(v - 1))
         top.addWidget(self.page_box)
-        top.addWidget(label(f"of {len(self.book)}", "meta"))
+        self.of_lbl = label("", "meta")
+        top.addWidget(self.of_lbl)
         self.right_btn = set_icon(QPushButton(objectName="pager"), "right")
         self.right_btn.clicked.connect(lambda: self.step(1))
         top.addWidget(self.right_btn)
+        self.next_file = QPushButton()
+        self.next_file.clicked.connect(lambda: self.switch(1))
+        top.addWidget(self.next_file)
         top.addSpacing(10)
         self.fit_btn = QPushButton()
         self.fit_btn.setToolTip("Show the whole page, or fill the width and scroll")
@@ -2606,8 +2605,83 @@ class Reader(QWidget):
         self.redraw.timeout.connect(self._show)
 
         self._label_direction()
+        self._label_book()
         size = parent.window().size() if parent else QSize(1100, 800)
         self.resize(max(900, size.width()), max(700, size.height()))
+        self.setFocus()
+
+    # ---- files
+
+    @staticmethod
+    def _open_book(path: Path) -> reader.Book:
+        book = reader.Book(path)
+        if not len(book):
+            book.close()
+            raise OSError(f"No pages found in {path.name}")
+        return book
+
+    def _start_page(self) -> int:
+        saved = self.history.reads(self.key).get(str(self.path), {})
+        finished = saved.get("page", 0) >= len(self.book) - 1
+        return saved.get("page", 0) if saved.get("read") and not finished else 0  # finished ones start over
+
+    def _neighbours(self) -> tuple[Path | None, Path | None]:
+        """The files before and after this one, in chapter order."""
+        files = self.history.by_chapter(self.key)
+        if self.path not in files:
+            return None, None
+        i = files.index(self.path)
+        return files[i - 1] if i else None, files[i + 1] if i + 1 < len(files) else None
+
+    @staticmethod
+    def _kind(path: Path) -> tuple[str, str]:
+        """A file's short name ("Vol. 03", "Ch. 11-20") and what it holds."""
+        name = path.stem.rsplit(" - ", 1)[-1]
+        if name.startswith("Vol."):
+            return name, "volume"
+        if name.startswith("Ch."):
+            return name, "chapters" if "-" in name else "chapter"
+        return name, "file"
+
+    def _label_book(self) -> None:
+        title = (self.history.get(self.key) or {}).get("title", "")
+        self.setWindowTitle(f"{title} · {self.path.stem}" if title else self.path.stem)
+        self.name.setText(self.path.stem)
+        self.name.setToolTip(str(self.path))
+        self.page_box.blockSignals(True)
+        self.page_box.setMaximum(len(self.book))
+        self.page_box.setValue(self.page + 1)
+        self.page_box.blockSignals(False)
+        range_tip(self.page_box)
+        self.of_lbl.setText(f"of {len(self.book)}")
+        for btn, path, side in zip((self.prev_file, self.next_file), self._neighbours(), ("Previous", "Next")):
+            btn.setVisible(path is not None)
+            if path:
+                name, kind = self._kind(path)
+                btn.setText(f"‹  {name}" if side == "Previous" else f"{name}  ›")
+                btn.setToolTip(f"{side} {kind}: {path.name}")
+
+    def switch(self, by: int) -> None:
+        """Carry on with the previous (-1) or next (+1) file without leaving the reader."""
+        path = self._neighbours()[by > 0]
+        if not path:
+            return
+        try:
+            book = self._open_book(path)
+        except (OSError, ValueError, zipfile.BadZipFile) as e:
+            logger.exception("couldn't read %s", path)
+            QMessageBox.warning(self, "Couldn't read it", f"{path.name} couldn't be opened ✿\n\n{e}")
+            return
+        logger.info("reading %s", path)
+        self.history.log_read(self.key, self.path, self.page, len(self.book))
+        self.book.close()
+        self.book, self.path, self.cache = book, path, {}
+        self.page = self._start_page()
+        self._label_book()
+        self._show()
+        bar = self.view.verticalScrollBar()
+        QTimer.singleShot(0, lambda: bar.setValue(0))
+        self.history.log_read(self.key, self.path, self.page, len(self.book))
         self.setFocus()
 
     # ---- pages

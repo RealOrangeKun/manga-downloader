@@ -205,7 +205,9 @@ of all chapters on the site), and what failed or is still waiting.
 
 - **Read** asks which file, then opens it in Nyanga's own reader (CBZ, PDF, EPUB or an image
   folder). It starts where you left off. Turn pages with the arrow keys, the mouse wheel or by
-  clicking the left or right side of the page. **Left to right** switches to right to left for
+  clicking the left or right side of the page. The buttons on either side of the page number
+  (like **‹ Vol. 02** and **Vol. 04 ›**) jump to the previous or next volume or set of chapters,
+  whichever way you saved them, without leaving the reader. **Left to right** switches to right to left for
   manga read like the printed book, **Fit width** fills the window for long strips, and F11 is
   full screen.
 - **Open** asks which file, then opens it in your computer's usual app for that kind of file.
