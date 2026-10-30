@@ -2,6 +2,12 @@
 
 Written by the release workflow from the commit messages. Each version is a [GitHub Release](https://github.com/nyanga-app/nyanga-app/releases) with its installer.
 
+## [1.18.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.18.0) (2026-10-30)
+
+### New
+- library: read now starts on the first chapter you haven't finished, and you can mark chapters finished
+- settings: settings are split into tabs, with a check for updates button and the reader's page direction
+
 ## [1.17.0](https://github.com/nyanga-app/nyanga-app/releases/tag/v1.17.0) (2026-10-23)
 
 ### New
