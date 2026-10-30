@@ -2428,22 +2428,22 @@ def short_name(path: Path, title: str) -> str:
 def read_state(r: dict) -> str:
     """What happened to a file before: read here (and how far) and/or opened in another app."""
     parts = []
-    if r.get("read"):
-        page, pages = r.get("page", 0) + 1, r.get("pages", 0)
-        parts.append(f"Finished {ago(r['read'])} ✦" if pages and page >= pages
-                     else f"Read {ago(r['read'])}, page {page} of {pages}")
+    if History.finished(r):
+        parts.append(f"Finished {ago(r.get('finished') or r.get('read'))} ✦")
+    elif r.get("read"):
+        parts.append(f"Read {ago(r['read'])}, page {r.get('page', 0) + 1} of {r.get('pages', 0)}")
     if r.get("opened"):
         parts.append(f"Opened {ago(r['opened'])}")
     return "  ·  ".join(parts)
 
 
 class PickRow(QFrame):
-    clicked = Signal()
+    clicked = Signal(object)  # the keyboard modifiers held
     double_clicked = Signal()
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
-            self.clicked.emit()
+            self.clicked.emit(event.modifiers())
 
     def mouseDoubleClickEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
@@ -2451,14 +2451,17 @@ class PickRow(QFrame):
 
 
 class PickFile(QDialog):
-    """Asks which of a manga's files to read or open, and shows which ones were read or opened before."""
+    """Asks which of a manga's files to read or open, and shows which ones were read or opened before.
+    Starts on the earliest one not finished yet; Ctrl/Shift-click picks several to mark finished or not."""
 
     def __init__(self, parent: QWidget, history: History, key: str, verb: str):
         super().__init__(parent, objectName="pickFile")
+        self.history, self.key, self.verb = history, key, verb
         self.files = history.by_chapter(key)
-        reads = history.reads(key)
         last = history.last_read(key)
-        self.chosen = last[0] if last else (self.files[0] if self.files else None)
+        self.chosen = history.up_next(key) or (last[0] if last else (self.files[0] if self.files else None))
+        self.picked: list[Path] = [self.chosen] if self.chosen else []
+        self.anchor = self.chosen
         title = (history.get(key) or {}).get("title", "")
         self.setWindowTitle(f"{verb} {title}")
         self.setMinimumWidth(560)
@@ -2470,6 +2473,9 @@ class PickFile(QDialog):
         sub = label(title, "hint", wrap=True)
         sub.setAlignment(Qt.AlignCenter)
         outer.addWidget(sub)
+        tip = label("Ctrl or Shift-click to pick a few and mark them finished ✿", "hint", wrap=True)
+        tip.setAlignment(Qt.AlignCenter)
+        outer.addWidget(tip)
         outer.addSpacing(10)
 
         rows = QWidget()
@@ -2477,6 +2483,7 @@ class PickFile(QDialog):
         col.setContentsMargins(0, 0, 8, 0)
         col.setSpacing(6)
         self.rows: dict[Path, PickRow] = {}
+        self.states: dict[Path, QLabel] = {}
         for f in self.files:
             row = PickRow(objectName="pickRow")
             row.setCursor(Qt.PointingHandCursor)
@@ -2485,14 +2492,12 @@ class PickFile(QDialog):
             text = QVBoxLayout()
             text.setSpacing(2)
             text.addWidget(label(short_name(f, title), "pickName", wrap=True))
-            state = read_state(reads.get(str(f), {}))
-            state_lbl = label(state or "Not opened yet", "pickState", wrap=True)
-            state_lbl.setProperty("fresh", not state)
-            text.addWidget(state_lbl)
+            self.states[f] = label("", "pickState", wrap=True)
+            text.addWidget(self.states[f])
             box.addLayout(text, 1)
             if last and f == last[0]:
                 box.addWidget(label("Last time ✦", "newBadge"), 0, Qt.AlignVCenter)
-            row.clicked.connect(lambda f=f: self._pick(f))
+            row.clicked.connect(lambda mods, f=f: self._click(f, mods))
             row.double_clicked.connect(lambda f=f: (self._pick(f), self.accept()))
             self.rows[f] = row
             col.addWidget(row)
@@ -2505,15 +2510,19 @@ class PickFile(QDialog):
 
         outer.addSpacing(10)
         buttons = QHBoxLayout()
+        self.mark = set_icon(QPushButton(), "check")
+        self.mark.clicked.connect(self._mark)
+        buttons.addWidget(self.mark)
         buttons.addStretch(1)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
         buttons.addWidget(cancel)
-        go = set_icon(QPushButton(f" {verb}", objectName="primary"), "book" if verb == "Read" else "external", "white")
-        go.setDefault(True)
-        go.clicked.connect(self.accept)
-        buttons.addWidget(go)
+        self.go = set_icon(QPushButton(f" {verb}", objectName="primary"), "book" if verb == "Read" else "external", "white")
+        self.go.setDefault(True)
+        self.go.clicked.connect(self.accept)
+        buttons.addWidget(self.go)
         outer.addLayout(buttons)
+        self._show_states()
         self._pick(self.chosen)
 
     def showEvent(self, event) -> None:
@@ -2521,11 +2530,52 @@ class PickFile(QDialog):
         if self.chosen in self.rows:
             QTimer.singleShot(0, lambda: self.scroll.ensureWidgetVisible(self.rows[self.chosen]))
 
-    def _pick(self, f: Path | None) -> None:
+    def _click(self, f: Path, mods) -> None:
+        if mods & Qt.ShiftModifier and self.anchor in self.rows:
+            a, b = sorted((self.files.index(self.anchor), self.files.index(f)))
+            self._pick(f, self.files[a:b + 1], keep_anchor=True)
+        elif mods & Qt.ControlModifier:
+            picked = [p for p in self.picked if p != f] if f in self.picked else self.picked + [f]
+            self._pick(f if f in picked else (picked[-1] if picked else None), picked)
+        else:
+            self._pick(f)
+
+    def _pick(self, f: Path | None, picked: list[Path] | None = None, keep_anchor: bool = False) -> None:
+        """Make f the current file; picked (just f if not given) are the highlighted ones."""
+        self.picked = picked if picked is not None else ([f] if f else [])
         self.chosen = f
+        if not keep_anchor:
+            self.anchor = f
         for path, row in self.rows.items():
-            row.setProperty("picked", path == f)
+            row.setProperty("picked", path in self.picked)
             repolish(row)
+        self.go.setEnabled(len(self.picked) == 1)
+        self.go.setToolTip("" if len(self.picked) == 1 else f"Pick just one to {self.verb.lower()} ✿")
+        self._show_mark()
+
+    def _done(self) -> bool:
+        """Whether every picked file is finished already (so the button marks them unfinished)."""
+        reads = self.history.reads(self.key)
+        return bool(self.picked) and all(History.finished(reads.get(str(f), {})) for f in self.picked)
+
+    def _show_mark(self) -> None:
+        n = len(self.picked)
+        what = "" if n < 2 else f" ({n})"
+        self.mark.setText(f" Mark unfinished{what}" if self._done() else f" Mark finished{what}")
+        self.mark.setEnabled(bool(n))
+
+    def _mark(self) -> None:
+        self.history.mark_finished(self.key, self.picked, not self._done())
+        self._show_states()
+        self._show_mark()
+
+    def _show_states(self) -> None:
+        reads = self.history.reads(self.key)
+        for f, lbl in self.states.items():
+            state = read_state(reads.get(str(f), {}))
+            lbl.setText(state or "Not opened yet")
+            lbl.setProperty("fresh", not state)
+            repolish(lbl)
 
     @classmethod
     def ask(cls, parent: QWidget, history: History, key: str, verb: str) -> Path | None:
@@ -2622,7 +2672,7 @@ class Reader(QWidget):
 
     def _start_page(self) -> int:
         saved = self.history.reads(self.key).get(str(self.path), {})
-        finished = saved.get("page", 0) >= len(self.book) - 1
+        finished = History.finished(saved) or saved.get("page", 0) >= len(self.book) - 1
         return saved.get("page", 0) if saved.get("read") and not finished else 0  # finished ones start over
 
     def _neighbours(self) -> tuple[Path | None, Path | None]:
@@ -3055,6 +3105,7 @@ class LibraryPage(QWidget):
     def _read(self, key: str) -> None:
         path = PickFile.ask(self, self.history, key, "Read")
         if not path:
+            self._fill(key)
             return
         if not path.exists():
             self.refresh()  # moved or deleted since
@@ -3074,6 +3125,7 @@ class LibraryPage(QWidget):
     def _open_file(self, key: str) -> None:
         path = PickFile.ask(self, self.history, key, "Open")
         if not path:
+            self._fill(key)  # files may have been marked finished
             return
         logger.info("opening %s in its usual app", path)
         if path.exists() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):

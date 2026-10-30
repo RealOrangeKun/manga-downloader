@@ -68,13 +68,26 @@ class History:
         return sorted((f for f in first if f.exists()), key=lambda f: (first[f], f.name))
 
     def reads(self, key: str) -> dict[str, dict]:
-        """Per file: when it was last read here ("read", with "page" and "pages") or opened elsewhere ("opened")."""
+        """Per file: when it was last read here ("read", with "page" and "pages") or opened elsewhere ("opened"),
+        and "finished" (when, or 0 for marked unfinished; missing means judge by the page)."""
         return self.data.get(key, {}).get("reads", {})
 
     def last_read(self, key: str) -> tuple[Path, dict] | None:
         """The file read or opened most recently, if it's still there."""
         done = [(Path(f), r) for f, r in self.reads(key).items() if Path(f).exists()]
         return max(done, key=lambda fr: max(fr[1].get("read", 0), fr[1].get("opened", 0)), default=None)
+
+    @staticmethod
+    def finished(r: dict) -> bool:
+        """Whether a file counts as finished: marked so by hand, or read here up to its last page."""
+        if "finished" in r:
+            return bool(r["finished"])
+        return bool(r.get("read")) and r.get("page", 0) + 1 >= r.get("pages", 0) > 0
+
+    def up_next(self, key: str) -> Path | None:
+        """The earliest file, in chapter order, that isn't finished yet."""
+        reads = self.reads(key)
+        return next((f for f in self.by_chapter(key) if not self.finished(reads.get(str(f), {}))), None)
 
     @staticmethod
     def percent(entry: dict) -> float:
@@ -131,7 +144,17 @@ class History:
 
     def log_read(self, key: str, path: Path, page: int, pages: int) -> None:
         """Remember where the reader is in a file, so it can carry on from there."""
-        self.data[key].setdefault("reads", {}).setdefault(str(path), {}).update(read=time.time(), page=page, pages=pages)
+        r = self.data[key].setdefault("reads", {}).setdefault(str(path), {})
+        r.update(read=time.time(), page=page, pages=pages)
+        if pages and page + 1 >= pages and not r.get("finished"):
+            r["finished"] = time.time()
+        self.save()
+
+    def mark_finished(self, key: str, paths: list[Path], done: bool) -> None:
+        """Mark files finished (or not) by hand, whatever page they were left on."""
+        reads = self.data[key].setdefault("reads", {})
+        for path in paths:
+            reads.setdefault(str(path), {})["finished"] = time.time() if done else 0
         self.save()
 
     def log_opened(self, key: str, path: Path) -> None:

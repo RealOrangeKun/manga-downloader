@@ -211,8 +211,9 @@ of all chapters on the site), and what failed or is still waiting.
   manga read like the printed book, **Fit width** fills the window for long strips, and F11 is
   full screen.
 - **Open** asks which file, then opens it in your computer's usual app for that kind of file.
-- Both show which files you've read or opened before, and how far you got, with the last one
-  already picked. The card also shows the last one.
+- Both show which files you've read or opened before, and how far you got, with the first one
+  you haven't finished already picked. Ctrl or Shift-click a few to mark them finished (or
+  unfinished) in one go. The card also shows the last one you read.
 - **Continue** picks up chapters from a download that was cancelled or interrupted.
 - **Retry failed** downloads the chapters that failed again.
 - **Folder** opens the folder with that manga's downloaded files.
