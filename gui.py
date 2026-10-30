@@ -2180,6 +2180,16 @@ class DownloadPage(QWidget):
 
 class SettingsPage(QWidget):
     changed = Signal(object)  # the settings as they were before saving
+    check_updates = Signal()
+    show_notes = Signal()
+
+    # The tabs: (name, icon, the settings each one holds, so a tab can show it has unsaved changes)
+    TABS = [
+        ("Downloads", "download", ("default_source", "download_dir", "default_format", "chapters_per_file")),
+        ("Look && reading", "book", ("theme", "files_per_page", "read_rtl")),
+        ("Speed", "paw", ("workers", "download_mode", "request_delay", "temp_dir", "keep_temp")),
+        ("App", "cat", ()),
+    ]
 
     def __init__(self, settings: Settings):
         super().__init__(objectName="page")
@@ -2187,33 +2197,101 @@ class SettingsPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
-        body = QWidget()
-        col = QVBoxLayout(body)
-        col.setContentsMargins(32, 28, 32, 16)
-        col.setSpacing(18)
-        scroll.setWidget(body)
-        outer.addWidget(scroll, 1)
-        col.addWidget(label("Settings ✿", "h1"))
+        head = QVBoxLayout()
+        head.setContentsMargins(32, 28, 32, 8)
+        head.setSpacing(14)
+        head.addWidget(label("Settings ✿", "h1"))
+        tabs = QHBoxLayout()
+        tabs.setSpacing(6)
+        self.tabs: list[QPushButton] = []
+        group = QButtonGroup(self)
+        self.stack = QStackedWidget()
+        for i, (name, icon, _) in enumerate(self.TABS):
+            tab = set_icon(QPushButton(f" {name}", objectName="tab", checkable=True), icon)
+            tab.setCursor(Qt.PointingHandCursor)
+            tab.clicked.connect(lambda _=False, i=i: self.stack.setCurrentIndex(i))
+            group.addButton(tab)
+            tabs.addWidget(tab)
+            self.tabs.append(tab)
+        tabs.addStretch(1)
+        self.tabs[0].setChecked(True)
+        head.addLayout(tabs)
+        outer.addLayout(head)
+        outer.addWidget(self.stack, 1)
+        downloads, look, speed, app = (self._tab_page() for _ in self.TABS)
 
-        look, ll = card()
-        lform = form_layout()
-        self.theme = combo_box()
-        self.theme.addItem("Match my system", theme.SYSTEM)
-        self.theme.addItem("Light", theme.LIGHT)
-        self.theme.addItem("Dark", theme.DARK)
-        lform.addRow("Theme", self.theme)
-        ll.addLayout(lform)
-        col.addWidget(look)
-
-        box, bl = card()
+        where, wl = card()
+        wl.addWidget(label("Where from, where to", "h2"))
         form = form_layout()
         self.source = combo_box()
         for site in core.SITES:
             self.source.addItem(site.name, site.name)
         form.addRow("Default source", with_hint(self.source, "Where the Download page searches first."))
         self.download_dir = QLineEdit()
-        form.addRow("Default download folder", folder_row(self.download_dir, "Default download folder"))
+        form.addRow("Download folder", with_hint(folder_row(self.download_dir, "Default download folder"),
+                                                 "Each manga gets its own folder in here."))
+        wl.addLayout(form)
+        downloads.addWidget(where)
+
+        files, fl = card()
+        fl.addWidget(label("Files", "h2"))
+        form = form_layout()
+        self.fmt = combo_box()
+        for key, name in FORMATS.items():
+            self.fmt.addItem(name, key)
+        form.addRow("Format", with_hint(self.fmt, "What each file is saved as. You can still pick another one per download."))
+        self.per_file = spin(minimum=1, maximum=999)
+        form.addRow("Chapters per file", with_hint(self.per_file, "Used when a site has no volume numbers for a title."))
+        fl.addLayout(form)
+        downloads.addWidget(files)
+
+        looks, ll = card()
+        ll.addWidget(label("Look", "h2"))
+        form = form_layout()
+        self.theme = combo_box()
+        self.theme.addItem("Match my system", theme.SYSTEM)
+        self.theme.addItem("Light", theme.LIGHT)
+        self.theme.addItem("Dark", theme.DARK)
+        form.addRow("Theme", self.theme)
+        self.per_page = spin(minimum=5, maximum=500)
+        form.addRow("Files per page", with_hint(self.per_page, "How many files the Download page lists at once."))
+        ll.addLayout(form)
+        look.addWidget(looks)
+
+        reading, rl = card()
+        rl.addWidget(label("Reader", "h2"))
+        form = form_layout()
+        self.rtl = combo_box()
+        self.rtl.addItem("Left to right", False)
+        self.rtl.addItem("Right to left, like a printed manga", True)
+        form.addRow("Turn pages", with_hint(self.rtl, "The button at the top of the reader switches this too."))
+        rl.addLayout(form)
+        look.addWidget(reading)
+
+        fast, sl = card()
+        sl.addWidget(label("Speed", "h2"))
+        form = form_layout()
+        self.workers = spin(minimum=1, maximum=os.cpu_count() or 1)
+        form.addRow("Files at once", with_hint(
+            self.workers, "1 downloads one file at a time. More workers make several files in parallel: "
+                          "downloads run on threads and building files uses separate CPU cores."))
+        self.delay = spin(QDoubleSpinBox, minimum=0.1, maximum=5.0, singleStep=0.1, decimals=1, suffix=" s")
+        self.mode = combo_box()
+        self.mode.addItem("Threads (recommended)", core.THREADS)
+        self.mode.addItem("Separate processes (CPU cores)", core.PROCESSES)
+        form.addRow("Run downloads on", with_hint(
+            self.mode, "Downloading mostly waits on the network, which threads handle without the GIL "
+                       "getting in the way, so processes rarely make it faster and start up slower. "
+                       "Building files always uses separate cores either way."))
+        form.addRow("Delay between requests", with_hint(
+            self.delay, "Shared by all workers, so adding workers never raises the request rate. "
+                        "Sites ask for human browsing speed; going too low can get your IP blocked."))
+        sl.addLayout(form)
+        speed.addWidget(fast)
+
+        temp, tl = card()
+        tl.addWidget(label("Temp files", "h2"))
+        form = form_layout()
         self.temp_dir = QLineEdit(placeholderText="Inside the download folder (.manga-tmp)")
         for edit in (self.download_dir, self.temp_dir):
             watch_folder(edit)
@@ -2221,40 +2299,46 @@ class SettingsPage(QWidget):
                                              "Pages are kept here while a file is being made."))
         self.keep_temp = QCheckBox("Keep temp files after a file is made")
         form.addRow("", self.keep_temp)
-        self.fmt = combo_box()
-        for key, name in FORMATS.items():
-            self.fmt.addItem(name, key)
-        form.addRow("Default format", self.fmt)
-        self.per_file = spin(minimum=1, maximum=999)
-        form.addRow("Chapters per file", with_hint(self.per_file, "Used when a site has no volume numbers for a title."))
-        self.per_page = spin(minimum=5, maximum=500)
-        form.addRow("Files per page", with_hint(self.per_page, "How many files the Download page lists at once."))
-        bl.addLayout(form)
-        col.addWidget(box)
+        tl.addLayout(form)
+        speed.addWidget(temp)
 
-        speed, sl = card()
-        sl.addWidget(label("Speed", "h2"))
-        sform = form_layout()
-        self.workers = spin(minimum=1, maximum=os.cpu_count() or 1)
-        sform.addRow("Files at once", with_hint(
-            self.workers, "1 downloads one file at a time. More workers make several files in parallel: "
-                          "downloads run on threads and building files uses separate CPU cores."))
-        self.delay = spin(QDoubleSpinBox, minimum=0.1, maximum=5.0, singleStep=0.1, decimals=1, suffix=" s")
-        self.mode = combo_box()
-        self.mode.addItem("Threads (recommended)", core.THREADS)
-        self.mode.addItem("Separate processes (CPU cores)", core.PROCESSES)
-        sform.addRow("Run downloads on", with_hint(
-            self.mode, "Downloading mostly waits on the network, which threads handle without the GIL "
-                       "getting in the way, so processes rarely make it faster and start up slower. "
-                       "Building files always uses separate cores either way."))
-        sform.addRow("Delay between requests", with_hint(
-            self.delay, "Shared by all workers, so adding workers never raises the request rate. "
-                        "Sites ask for human browsing speed; going too low can get your IP blocked."))
-        sl.addLayout(sform)
-        col.addWidget(speed)
+        ups, ul = card()
+        ul.addWidget(label("Updates", "h2"))
+        urow = QHBoxLayout()
+        urow.addWidget(label(f"You're on version {__version__}", "pathTitle"), 1)
+        notes = set_icon(QPushButton(" What's new"), "heart")
+        notes.clicked.connect(self.show_notes)
+        urow.addWidget(notes)
+        self.check_btn = set_icon(QPushButton(" Check for updates"), "refresh")
+        self.check_btn.clicked.connect(self._check)
+        urow.addWidget(self.check_btn)
+        ul.addLayout(urow)
+        self.update_hint = label("", "hint", wrap=True)
+        ul.addWidget(self.update_hint)
+        if updater.can_install():
+            self.update_hint.setText("Nyanga also looks for updates on its own every few hours ✦")
+        else:
+            self.check_btn.setEnabled(False)
+            self.update_hint.setText(
+                "Move Nyanga's AppImage to a folder you can write to, and it can update itself ✿"
+                if appmenu.available() else "Running from source: pull the repo to update ✿")
+        app.addWidget(ups)
+
+        if appmenu.available():  # only the Linux AppImage; Windows has its installer
+            menu, ml = card()
+            ml.addWidget(label("App menu", "h2"))
+            mrow = QHBoxLayout()
+            self.menu_hint = label("", "hint", wrap=True)
+            mrow.addWidget(self.menu_hint, 1)
+            self.menu_btn = set_icon(QPushButton(), "heart")
+            self.menu_btn.clicked.connect(self._toggle_menu)
+            mrow.addWidget(self.menu_btn)
+            ml.addLayout(mrow)
+            app.addWidget(menu)
+            self._sync_menu()
 
         where, wl = card()
-        wl.addWidget(label("Settings file", "pathTitle"))
+        wl.addWidget(label("Settings file", "h2"))
         prow = QHBoxLayout()
         path = label(str(Settings.path()), "pathChip")
         path.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -2263,20 +2347,14 @@ class SettingsPage(QWidget):
         show.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(Settings.path().parent))))
         prow.addWidget(show)
         wl.addLayout(prow)
-        col.addWidget(where)
-
-        if appmenu.available():  # only the Linux AppImage; Windows has its installer
-            menu, ml = card()
-            ml.addWidget(label("App menu", "pathTitle"))
-            mrow = QHBoxLayout()
-            self.menu_hint = label("", "hint", wrap=True)
-            mrow.addWidget(self.menu_hint, 1)
-            self.menu_btn = set_icon(QPushButton(), "heart")
-            self.menu_btn.clicked.connect(self._toggle_menu)
-            mrow.addWidget(self.menu_btn)
-            ml.addLayout(mrow)
-            col.addWidget(menu)
-            self._sync_menu()
+        app.addWidget(where)
+        for col in (downloads, look, speed, app):
+            col.addStretch(1)
+        for form in self.findChildren(QFormLayout):  # line the fields up across cards
+            for i in range(form.rowCount()):
+                item = form.itemAt(i, QFormLayout.LabelRole)
+                if item and item.widget():
+                    item.widget().setMinimumWidth(160)
 
         row = QHBoxLayout()
         self.saved = QFrame(objectName="toast")
@@ -2300,7 +2378,6 @@ class SettingsPage(QWidget):
         row.addWidget(reset)
         row.addWidget(self.undo_btn)
         row.addWidget(self.save_btn)
-        col.addStretch(1)
         bottom = QWidget()
         bottom.setLayout(row)
         row.setContentsMargins(32, 4, 32, 22)  # stays in view while the page scrolls
@@ -2309,12 +2386,41 @@ class SettingsPage(QWidget):
         # Save and Undo are only clickable while the form differs from what is saved.
         for w in (self.download_dir, self.temp_dir):
             w.textChanged.connect(self._update_dirty)
-        for w in (self.theme, self.source, self.fmt, self.mode):
+        for w in (self.theme, self.source, self.fmt, self.mode, self.rtl):
             w.currentIndexChanged.connect(self._update_dirty)
         for w in (self.per_file, self.per_page, self.workers, self.delay):
             w.valueChanged.connect(self._update_dirty)
         self.keep_temp.toggled.connect(self._update_dirty)
         self._update_dirty()
+
+    def _tab_page(self) -> QVBoxLayout:
+        """A scrolling page for one tab; returns the column its cards go in."""
+        scroll = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        body = QWidget()
+        col = QVBoxLayout(body)
+        col.setContentsMargins(32, 12, 32, 16)
+        col.setSpacing(18)
+        scroll.setWidget(body)
+        self.stack.addWidget(scroll)
+        return col
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # The reader saves its page direction itself; follow it unless it was changed here and not saved.
+        if self.rtl.currentData() == self.shown.read_rtl != self.settings.read_rtl:
+            self.rtl.setCurrentIndex(self.rtl.findData(self.settings.read_rtl))
+            self.shown.read_rtl = self.settings.read_rtl
+        self._update_dirty()
+
+    def _check(self) -> None:
+        self.check_btn.setEnabled(False)
+        self.update_hint.setText("Looking for a new version…")
+        self.check_updates.emit()
+
+    def update_result(self, text: str) -> None:
+        """What a check for updates found, said under the button."""
+        self.check_btn.setEnabled(True)
+        self.update_hint.setText(text)
 
     def _sync_menu(self) -> None:
         state = appmenu.state()
@@ -2348,6 +2454,8 @@ class SettingsPage(QWidget):
         self._sync_menu()
 
     def _show(self, s: Settings) -> None:
+        self.shown = replace(self.settings)  # what was saved when the form was filled
+        self.rtl.setCurrentIndex(max(0, self.rtl.findData(s.read_rtl)))
         self.download_dir.setText(s.download_dir)
         self.temp_dir.setText(s.temp_dir)
         self.keep_temp.setChecked(s.keep_temp)
@@ -2375,6 +2483,7 @@ class SettingsPage(QWidget):
             keep_temp=self.keep_temp.isChecked(),
             theme=self.theme.currentData(),
             default_source=self.source.currentData(),
+            read_rtl=self.rtl.currentData(),
         )
 
     def _toast(self, text: str, error: bool = False) -> None:
@@ -2395,6 +2504,11 @@ class SettingsPage(QWidget):
     def _update_dirty(self, *_) -> None:
         for b in (self.save_btn, self.undo_btn):
             b.setEnabled(self.dirty())
+        form = self._form()
+        for tab, (name, _, keys) in zip(self.tabs, self.TABS):
+            changed = any(getattr(form, k) != getattr(self.settings, k) for k in keys)
+            tab.setText(f" {name} ✦" if changed else f" {name}")
+            tab.setToolTip("Changed, not saved yet" if changed else "")
 
     def _save(self) -> None:
         for name, edit in (("Download folder", self.download_dir), ("Temp folder", self.temp_dir)):
@@ -2407,6 +2521,7 @@ class SettingsPage(QWidget):
         # Update in place: the download page holds the same Settings object.
         for f in fields(Settings):
             setattr(self.settings, f.name, getattr(self._form(), f.name))
+        self.shown = replace(self.settings)
         try:
             self.settings.save()
             self._toast("Saved")
@@ -3105,7 +3220,7 @@ class LibraryPage(QWidget):
     def _read(self, key: str) -> None:
         path = PickFile.ask(self, self.history, key, "Read")
         if not path:
-            self._fill(key)
+            self._fill(key)  # files may have been marked finished
             return
         if not path.exists():
             self.refresh()  # moved or deleted since
@@ -3125,7 +3240,7 @@ class LibraryPage(QWidget):
     def _open_file(self, key: str) -> None:
         path = PickFile.ask(self, self.history, key, "Open")
         if not path:
-            self._fill(key)  # files may have been marked finished
+            self._fill(key)
             return
         logger.info("opening %s in its usual app", path)
         if path.exists() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
@@ -3909,6 +4024,7 @@ class UpdatePill(QFrame):
 class UpdateBridge(QObject):
     """Carries update checks and the installer download back to the GUI thread."""
     found = Signal(object)  # updater.Release
+    checked = Signal(str)  # what a check from Settings found, to say there
     progress = Signal(int, int)  # bytes done, total
     ready = Signal(object)  # installer path
     failed = Signal(str)
@@ -3998,6 +4114,8 @@ class MainWindow(QWidget):
         self.library.open_requested.connect(self._open_from_library)
         self.settings_page = SettingsPage(self.settings)
         self.settings_page.changed.connect(self._settings_saved)
+        self.settings_page.check_updates.connect(lambda: self.check_updates(manual=True))
+        self.settings_page.show_notes.connect(self._show_all_notes)
         for page in (self.download, self.library, self.settings_page):
             self.stack.addWidget(page)
         nav = QButtonGroup(self)
@@ -4056,6 +4174,7 @@ class MainWindow(QWidget):
         self.download.completed.connect(lambda *_: self._sync_pill())
         self.updates = UpdateBridge()
         self.updates.found.connect(self._update_found)
+        self.updates.checked.connect(self.settings_page.update_result)
         self.updates.progress.connect(self._update_progress)
         self.updates.ready.connect(self._update_ready)
         self.updates.failed.connect(self._update_failed)
@@ -4171,16 +4290,27 @@ class MainWindow(QWidget):
 
     # ----------------------------------------------------------------------- updates
 
-    def check_updates(self, first: bool = False) -> None:
+    def check_updates(self, first: bool = False, manual: bool = False) -> None:
+        if manual and self.update_state in ("updating", "ready"):
+            self.settings_page.update_result("An update is already on its way, see the corner ✦")
+            return
+
         def work():
             try:
                 if first:
                     updater.cleanup()
                 release = updater.latest()
             except (requests.RequestException, ValueError, KeyError):
+                if manual:
+                    self.updates.checked.emit("Couldn't reach GitHub. Check your internet and try again ✿")
                 return  # offline or GitHub is busy; try again at the next check
             if release and updater.is_newer(release):
+                if manual:
+                    self.offered = ""  # asked for it, so offer it even if it was put off before
+                    self.updates.checked.emit(f"Version {release.version} is out ✦")
                 self.updates.found.emit(release)
+            elif manual:
+                self.updates.checked.emit("You're on the newest version ✦")
 
         threading.Thread(target=work, daemon=True).start()
 

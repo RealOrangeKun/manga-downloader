@@ -114,7 +114,7 @@ That's the only time you install it ✦
 2. Put it somewhere it can stay (like `~/Applications`) and make it executable: right-click it,
    **Properties**, tick **Allow executing file as program** (or `chmod +x Nyanga-x86_64.AppImage`).
 3. Double-click it to open Nyanga.
-4. Want it in your app menu? Go to **Settings** and press **Add Nyanga to your app menu**
+4. Want it in your app menu? Go to **Settings**, then **App**, and press **Add Nyanga to your app menu**
    (and **Remove** to take it out again). If a tool like Gear Lever or AppImageLauncher already
    added it, the button says so and stays out of the way.
 
@@ -134,7 +134,8 @@ Nyanga is then in your app menu right away. Step-by-step guides for every way ar
 
 ### 🎁 Updates
 
-When a new version is out, a card pops up with **Update now**. It downloads the new version,
+When a new version is out, a card pops up with **Update now** (Nyanga looks every few hours,
+or right away with **Check for updates** under **Settings** › **App**). It downloads the new version,
 installs it and reopens by itself. On Windows and with the `.deb`/`.rpm`, only the parts of the app
 that changed get downloaded, usually a few MB. Your settings and library are kept (they live in
 `%APPDATA%\Nyanga` on Windows; on Linux the settings are in `~/.config/Nyanga` and the
@@ -251,19 +252,25 @@ computer need to be on the same Wi‑Fi; nothing goes through the internet.
 
 **Settings page**
 
-- Theme: light, dark, or match your system (the moon/sun button in the sidebar switches too).
-- Default source: the site the Download page searches unless you pick another.
-- Default download folder and temp folder, and whether to keep temp files.
-- Default format and chapters per file.
-- Files per page: how many files the Download page lists at once.
+It's split into tabs, and a tab with unsaved changes gets a little ✦.
+
+- **Downloads**: the site the Download page searches first, the download folder, the format and
+  chapters per file.
+- **Look & reading**: theme (light, dark, or match your system; the moon/sun button in the
+  sidebar switches too), how many files the Download page lists at once, and which way the
+  reader turns pages.
+- **Speed**:
+  - **Files at once**: how many files are made in parallel. `1` does one at a time.
+  - **Run downloads on**: threads (recommended) or separate processes. Downloading mostly waits
+    on the network, so processes rarely help; building files uses separate cores either way.
+  - **Delay between requests**: shared by all workers, so more workers never means more
+    requests per second. Sites ask for human browsing speed; going too low can get you blocked.
+  - The temp folder, and whether to keep temp files.
+- **App**: your version, **What's new**, **Check for updates**, where the settings file is
+  and, in the Linux AppImage, adding Nyanga to your app menu.
 - Change something and **Save** or **Undo** it before leaving the page. Saving new defaults
   also updates a manga that's open on the Download page, except for the fields you changed
   there yourself.
-- **Files at once**: how many files are made in parallel. `1` does one at a time.
-- **Run downloads on**: threads (recommended) or separate processes. Downloading mostly waits
-  on the network, so processes rarely help; building files uses separate cores either way.
-- **Delay between requests**: shared by all workers, so more workers never means more
-  requests per second. Sites ask for human browsing speed; going too low can get you blocked.
 
 Settings and history are saved in `%APPDATA%\Nyanga` in the installed app on Windows,
 `~/.config/Nyanga` (settings) and `~/.local/share/Nyanga` (library) in the Linux AppImage, or next to

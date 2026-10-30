@@ -95,6 +95,12 @@ QPushButton:disabled { background: $disabled_bg; color: $disabled_text; }
 QPushButton#viewToggle { background: transparent; padding: 7px; border-radius: 11px; }
 QPushButton#viewToggle:hover { background: $button_hover; }
 QPushButton#viewToggle:checked { background: $button; }
+QPushButton#tab {
+    background: transparent; border: none; border-radius: 14px; padding: 8px 16px;
+    font-size: 14px; font-weight: 600; color: $muted;
+}
+QPushButton#tab:hover { background: $alt_row; color: $text; }
+QPushButton#tab:checked { background: $chip; color: $accent; }
 QPushButton#chip { padding: 6px 14px; border-radius: 14px; font-size: 13px; background: $alt_row; }
 QPushButton#chip:hover { background: $button_hover; }
 QPushButton#chip:checked { background: $chunk_b; color: white; }
