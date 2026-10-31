@@ -24,7 +24,7 @@
       <li>Send the files to your phone over your home Wi-Fi with a QR code</li>
       <li>Light and dark mode, and it keeps itself up to date</li>
     </ul>
-    <p>Works with fanfox.net for now.</p>
+    <p>Works with fanfox.net and mangadex.org.</p>
   </description>
 
   <launchable type="desktop-id">nyanga.desktop</launchable>

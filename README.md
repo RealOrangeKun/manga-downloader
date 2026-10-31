@@ -61,7 +61,9 @@
 - 🌙 **Light and dark**, or follow your system.
 - 🎁 **Updates itself**: when a new version is out, one click and it's done.
 
-Supported sites: **fanfox.net** (`https://fanfox.net/manga/<title>/`)
+Supported sites: **fanfox.net** (`https://fanfox.net/manga/<title>/`) and **mangadex.org**
+(`https://mangadex.org/title/<id>`, English fan translations; big licensed series there often only
+link to the publisher's own site, so fanfox.net is the place for those)
 
 ## 🐾 Meet the cats
 
@@ -319,7 +321,8 @@ Nyanga closes. Downloaded manga still go to your download folder.
   formats), `gui.py` (the window), `loader.py` (the cats), `updater.py` (checks GitHub for new
   versions and installs them), `paths.py` (where assets and user data live, from source and in
   the exe).
-- To add a site, write a class like `FanFox` in `core.py` with `name`, `home`, `url_re`, `search()`, `info()`,
+- To add a site, write a class like `FanFox` or `MangaDex` in `core.py` (subclass `Site` for the shared
+  HTTP session, retries and image fetching) with `name`, `home`, `url_re`, `search()`, `info()`,
   `page_urls()` and `image()`, and add it to `SITES`. For filters, give it `genres` and `kinds`
   lists and let `search()` take a `SearchFilters`; a `sorts` list and a `sort` argument add sorting; `about()` adds ratings and genres to its search results. It then shows up as a source to search.
 - Commit messages are [conventional commits](https://www.conventionalcommits.org) (`fix:`,

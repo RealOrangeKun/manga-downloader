@@ -21,6 +21,7 @@ from urllib.parse import urlencode
 import requests
 
 from builders import build_file, pages_of
+from version import __version__
 
 log = logging.getLogger(__name__)
 
@@ -128,7 +129,89 @@ class SharedRateLimiter:
 # --------------------------------------------------------------------------- sites
 
 
-class FanFox:
+class Site:
+    """What every site shares: an HTTP session per thread, rate limiting and retries."""
+    referer = ""  # sent with page requests
+    image_referer = ""  # sent with image requests
+    _user_agent = f"Nyanga/{__version__}"
+
+    def __init__(self, limiter: RateLimiter):
+        self.limiter = limiter
+        self._local = threading.local()  # one HTTP session per thread
+
+    def __getstate__(self) -> dict:
+        state = self.__dict__.copy()
+        del state["_local"]  # sessions can't be sent to another process; each one makes its own
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
+        self._local = threading.local()
+
+    def with_limiter(self, limiter):
+        clone = copy.copy(self)
+        clone.limiter = limiter
+        return clone
+
+    def _session(self) -> requests.Session:
+        s = requests.Session()
+        s.headers["User-Agent"] = self._user_agent
+        return s
+
+    @property
+    def _http(self) -> requests.Session:
+        if not hasattr(self._local, "session"):
+            self._local.session = self._session()
+        return self._local.session
+
+    def _get(self, url: str, referer: str | None = None, retries: int = 3,
+             method: str = "GET") -> requests.Response:
+        last = "unknown error"
+        headers = {"Referer": self.referer if referer is None else referer}
+        for attempt in range(retries):
+            self.limiter.wait()
+            if attempt:
+                time.sleep(attempt * 2)  # back off a little more after each failure
+            try:
+                resp = self._http.request(method, url, headers=headers, timeout=30)
+                log.debug("%s %s -> %s (%d bytes)", method, url, resp.status_code, len(resp.content))
+                if resp.status_code == 200:
+                    return resp
+                last = f"HTTP {resp.status_code}"
+                if resp.status_code in (403, 404):
+                    break
+                if resp.status_code == 429:  # too many requests: wait as long as the site asks
+                    wait = resp.headers.get("Retry-After") or resp.headers.get("X-RateLimit-Retry-After", "")
+                    if wait.isdigit():
+                        wait = int(wait)
+                        time.sleep(min(60.0, max(0.0, wait - time.time() if wait > 10**9 else wait)))
+            except requests.RequestException as e:
+                last = type(e).__name__
+                log.debug("%s %s failed: %r", method, url, e)
+            log.info("try %d of %d for %s: %s", attempt + 1, retries, url, last)
+        log.warning("giving up on %s: %s", url, last)
+        raise SiteError(f"Could not fetch {url}: {last}")
+
+    def cover(self, url: str) -> bytes | None:
+        try:
+            return self._get(url, retries=1).content
+        except SiteError:
+            return None
+
+    def image_size(self, url: str) -> int | None:
+        """Size of an image in bytes, asking only for its headers."""
+        resp = self._get(url, referer=self.image_referer, retries=1, method="HEAD")
+        length = resp.headers.get("content-length", "")
+        return int(length) if length.isdigit() else None
+
+    def image(self, url: str) -> bytes:
+        resp = self._get(url, referer=self.image_referer)
+        if not resp.headers.get("content-type", "").startswith("image/"):
+            raise SiteError(f"Not an image: {url}")
+        return resp.content
+
+
+class FanFox(Site):
     name = "fanfox.net"
     home = "https://fanfox.net/"  # the sidebar's Supported sites box links here
     example = "https://fanfox.net/manga/<title>/"
@@ -153,60 +236,21 @@ class FanFox:
     _sort_ids = {"A to Z": 1, "Newest": 2}  # its 3 (rating) only goes lowest first, 4 isn't popularity
     _user_agent = ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/129.0 Mobile Safari/537.36")
+    referer = "https://fanfox.net/"
+    image_referer = "https://m.fanfox.net/"
 
     def __init__(self, url: str, limiter: RateLimiter):
+        super().__init__(limiter)
         match = self.url_re.search(url)
         self.slug = match.group(1).lower() if match else ""  # empty for an instance that only searches
-        self.limiter = limiter
-        self._local = threading.local()  # one HTTP session per thread
         # Only this title's own links; the page also links to chapters of other manga.
         self._chapter_re = re.compile(
             rf'href="(/manga/{re.escape(self.slug)}/(?:v([^/"]+)/)?c([\d.]+)/1\.html)"', re.I)
 
-    def __getstate__(self) -> dict:
-        state = self.__dict__.copy()
-        del state["_local"]  # sessions can't be sent to another process; each one makes its own
-        return state
-
-    def __setstate__(self, state: dict) -> None:
-        self.__dict__.update(state)
-        self._local = threading.local()
-
-    def with_limiter(self, limiter) -> FanFox:
-        clone = copy.copy(self)
-        clone.limiter = limiter
-        return clone
-
-    @property
-    def _http(self) -> requests.Session:
-        if not hasattr(self._local, "session"):
-            s = requests.Session()
-            s.headers["User-Agent"] = self._user_agent
-            s.cookies.set("isAdult", "1", domain=".fanfox.net")
-            self._local.session = s
-        return self._local.session
-
-    def _get(self, url: str, referer: str = "https://fanfox.net/", retries: int = 3,
-             method: str = "GET") -> requests.Response:
-        last = "unknown error"
-        for attempt in range(retries):
-            self.limiter.wait()
-            if attempt:
-                time.sleep(attempt * 2)  # back off a little more after each failure
-            try:
-                resp = self._http.request(method, url, headers={"Referer": referer}, timeout=30)
-                log.debug("%s %s -> %s (%d bytes)", method, url, resp.status_code, len(resp.content))
-                if resp.status_code == 200:
-                    return resp
-                last = f"HTTP {resp.status_code}"
-                if resp.status_code in (403, 404):
-                    break
-            except requests.RequestException as e:
-                last = type(e).__name__
-                log.debug("%s %s failed: %r", method, url, e)
-            log.info("try %d of %d for %s: %s", attempt + 1, retries, url, last)
-        log.warning("giving up on %s: %s", url, last)
-        raise SiteError(f"Could not fetch {url}: {last}")
+    def _session(self) -> requests.Session:
+        s = super()._session()
+        s.cookies.set("isAdult", "1", domain=".fanfox.net")
+        return s
 
     @property
     def key(self) -> str:
@@ -286,12 +330,6 @@ class FanFox:
         info = type(self)(url, self.limiter).info(with_cover=False)
         return info.genres, info.description, info.rating
 
-    def cover(self, url: str) -> bytes | None:
-        try:
-            return self._get(url, retries=1).content
-        except SiteError:
-            return None
-
     def page_urls(self, chapter: Chapter) -> list[str]:
         # The mobile "roll" reader lists every page of a chapter in one document.
         roll = "https://m.fanfox.net" + chapter.url.replace("/manga/", "/roll_manga/", 1)
@@ -300,20 +338,196 @@ class FanFox:
             raise SiteError(f"No pages found for chapter {fmt_num(chapter.number)}")
         return ["https:" + u if u.startswith("//") else u for u in urls]
 
-    def image_size(self, url: str) -> int | None:
-        """Size of an image in bytes, asking only for its headers."""
-        resp = self._get(url, referer="https://m.fanfox.net/", retries=1, method="HEAD")
-        length = resp.headers.get("content-length", "")
-        return int(length) if length.isdigit() else None
 
-    def image(self, url: str) -> bytes:
-        resp = self._get(url, referer="https://m.fanfox.net/")
-        if not resp.headers.get("content-type", "").startswith("image/"):
-            raise SiteError(f"Not an image: {url}")
-        return resp.content
+class MangaDex(Site):
+    """mangadex.org through its public API: fan translations, English only for now."""
+    name = "mangadex.org"
+    home = "https://mangadex.org/"
+    example = "https://mangadex.org/title/<id>"
+    url_re = re.compile(r"mangadex\.org/title/([0-9a-f]{8}-[0-9a-f-]{27})", re.I)
+    api = "https://api.mangadex.org"
+    referer = image_referer = "https://mangadex.org/"  # without it, covers come back as a "read this at" picture
+    language = "en"
+    per_page = 20
+    genres = ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mystery", "Psychological", "Romance",
+              "Sci-Fi", "Slice of Life", "Sports", "Thriller", "Tragedy", "Historical", "Isekai", "Crime", "Mecha",
+              "Medical", "Philosophical", "Superhero", "Magical Girls", "Wuxia", "Boys' Love", "Girls' Love",
+              "School Life", "Martial Arts", "Supernatural", "Magic", "Reincarnation", "Time Travel", "Harem",
+              "Reverse Harem", "Villainess", "Monsters", "Vampires", "Zombies", "Survival", "Post-Apocalyptic",
+              "Video Games", "Military", "Office Workers", "Cooking", "Music", "Gore", "Long Strip", "Full Color",
+              "Oneshot", "Web Comic", "Doujinshi"]
+    kinds = ["Japanese Manga", "Korean Manhwa", "Chinese Manhua"]
+    _languages = {"Japanese Manga": ["ja"], "Korean Manhwa": ["ko"], "Chinese Manhua": ["zh", "zh-hk"]}
+    sorts = ["Best match", "Most followed", "Top rated", "Latest chapter", "Newest", "A to Z"]
+    _orders = {"Best match": ("relevance", "desc"), "Most followed": ("followedCount", "desc"),
+               "Top rated": ("rating", "desc"), "Latest chapter": ("latestUploadedChapter", "desc"),
+               "Newest": ("createdAt", "desc"), "A to Z": ("title", "asc")}
+    _statuses = {"ongoing": ONGOING, "completed": COMPLETED, "hiatus": "On hiatus", "cancelled": "Cancelled"}
+    _ratings = ["safe", "suggestive", "erotica", "pornographic"]
+    _tag_ids: dict[str, str] = {}  # tag name -> id, fetched the first time a filter needs them
+
+    def __init__(self, url: str, limiter: RateLimiter):
+        super().__init__(limiter)
+        match = self.url_re.search(url)
+        self.slug = match.group(1).lower() if match else ""
+
+    @property
+    def key(self) -> str:
+        return f"{self.name}:{self.slug}"
+
+    @property
+    def title_url(self) -> str:
+        return f"https://mangadex.org/title/{self.slug}"
+
+    def _json(self, path: str, params: dict | list | None = None) -> dict:
+        query = "?" + urlencode(params, doseq=True) if params else ""
+        try:
+            data = self._get(f"{self.api}{path}{query}").json()
+        except ValueError:
+            raise SiteError("MangaDex sent back something odd. Try again in a moment ✦")
+        if data.get("result") != "ok":
+            raise SiteError("MangaDex said no: " + "; ".join(e.get("detail", "") for e in data.get("errors", [])))
+        return data
+
+    def _pick(self, names: dict) -> str:
+        """The English text of a {language: text} map, else the first one."""
+        return (names.get(self.language) or next(iter(names.values()), "")).strip()
+
+    def _title(self, attrs: dict) -> str:
+        """The English title when there is one: the main title is often romanised Japanese."""
+        if self.language in attrs["title"]:
+            return attrs["title"][self.language].strip()
+        alt = next((t[self.language] for t in attrs.get("altTitles", []) if self.language in t), "")
+        return alt.strip() or self._pick(attrs["title"])
+
+    def _cover_url(self, manga: dict, size: int) -> str:
+        art = next((r for r in manga["relationships"] if r["type"] == "cover_art" and "attributes" in r), None)
+        return f"https://uploads.mangadex.org/covers/{manga['id']}/{art['attributes']['fileName']}.{size}.jpg" \
+            if art else ""
+
+    @staticmethod
+    def _plain_desc(text: str) -> str:
+        text = text.split("\n---")[0]  # the rest is usually links to other sites
+        text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)  # markdown links
+        return re.sub(r"[*_]{1,3}([^*_]+)[*_]{1,3}", r"\1", text).strip()
+
+    def _scores(self, ids: list[str]) -> dict[str, float]:
+        """Ratings out of 5, many titles in one request."""
+        try:
+            stats = self._json("/statistics/manga", {"manga[]": ids})["statistics"]
+        except SiteError:
+            return {}
+        return {i: round((s.get("rating", {}).get("bayesian") or 0) / 2, 2) for i, s in stats.items()}
+
+    def info(self, with_cover: bool = True) -> MangaInfo:
+        manga = self._json(f"/manga/{self.slug}", {"includes[]": ["cover_art"]})["data"]
+        attrs = manga["attributes"]
+        info = MangaInfo(
+            title=self._title(attrs),
+            chapters=self._chapters(),
+            status=self._statuses.get(attrs.get("status") or "", ""),
+            genres=[self._pick(t["attributes"]["name"]) for t in attrs.get("tags", [])
+                    if t["attributes"]["group"] in ("genre", "theme")],
+            description=self._plain_desc(self._pick(attrs.get("description") or {})),
+            rating=self._scores([self.slug]).get(self.slug, 0.0),
+        )
+        if not info.chapters:
+            raise SiteError(f"MangaDex has no English chapters of {info.title} to download: big licensed "
+                            "titles often only link to the publisher's own site. Try fanfox.net ✦")
+        if with_cover and (url := self._cover_url(manga, 512)):
+            info.cover = self.cover(url)
+        return info
+
+    def _chapters(self) -> list[Chapter]:
+        """One upload per chapter number; when several groups translated it, the one with the most chapters."""
+        found, offset, total = [], 0, 1
+        while offset < total:
+            data = self._json(f"/manga/{self.slug}/feed", {
+                "translatedLanguage[]": [self.language], "contentRating[]": self._ratings, "limit": 500,
+                "offset": offset, "order[chapter]": "asc", "includeExternalUrl": 0, "includeEmptyPages": 0})
+            found += data["data"]
+            offset, total = offset + len(data["data"]), data["total"]
+            if not data["data"]:
+                break
+        group_of = lambda c: next((r["id"] for r in c["relationships"] if r["type"] == "scanlation_group"), "")
+        sizes: dict[str, int] = {}
+        for c in found:
+            sizes[group_of(c)] = sizes.get(group_of(c), 0) + 1
+        best: dict[float, dict] = {}
+        for c in found:
+            attrs = c["attributes"]
+            if attrs.get("externalUrl") or not attrs.get("pages"):
+                continue  # only on the publisher's own site
+            try:
+                number = float(attrs.get("chapter") or 0)  # a oneshot has no number
+            except ValueError:
+                continue
+            if number not in best or sizes[group_of(c)] > sizes[group_of(best[number])]:
+                best[number] = c
+        return [Chapter(n, int(v) if (v := c["attributes"].get("volume") or "").isdigit() else NO_VOLUME,
+                        f"https://mangadex.org/chapter/{c['id']}") for n, c in sorted(best.items())]
+
+    @classmethod
+    def search(cls, query: str, limiter: RateLimiter, page_no: int = 1,
+               filters: SearchFilters | None = None, sort: str = "") -> tuple[list[SearchResult], int]:
+        site = cls("", limiter)
+        query = query.strip()
+        field, way = cls._orders.get(sort or "Best match")
+        if field == "relevance" and not query:
+            field, way = "followedCount", "desc"  # nothing to match against when just browsing
+        params = {"title": query, "limit": cls.per_page, "offset": (page_no - 1) * cls.per_page,
+                  f"order[{field}]": way, "includes[]": ["cover_art", "author"],
+                  "contentRating[]": cls._ratings[:3], "availableTranslatedLanguage[]": [cls.language],
+                  "hasAvailableChapters": "true"}
+        if not query:
+            del params["title"]
+        if filters:
+            if filters.genres or filters.without:
+                ids = site._tags()
+                params["includedTags[]"] = [ids[g] for g in filters.genres if g in ids]
+                params["excludedTags[]"] = [ids[g] for g in filters.without if g in ids]
+            if filters.kind in cls._languages:
+                params["originalLanguage[]"] = cls._languages[filters.kind]
+            if filters.status:
+                params["status[]"] = [k for k, v in cls._statuses.items() if v == filters.status]
+        data = site._json("/manga", params)
+        pages = max(1, -(-min(data["total"], 10_000) // cls.per_page))  # the API stops at 10,000 results
+        scores = site._scores([m["id"] for m in data["data"]]) if data["data"] else {}
+        results = []
+        for m in data["data"]:
+            attrs = m["attributes"]
+            last = attrs.get("lastChapter") or ""
+            results.append(SearchResult(
+                title=site._title(attrs),
+                url=f"https://mangadex.org/title/{m['id']}",
+                cover_url=site._cover_url(m, 256),
+                status=cls._statuses.get(attrs.get("status") or "", ""),
+                latest=f"Ch. {last}" if last else "",
+                author=", ".join(r["attributes"]["name"] for r in m["relationships"]
+                                 if r["type"] == "author" and "attributes" in r),
+                genres=[site._pick(t["attributes"]["name"]) for t in attrs.get("tags", [])
+                        if t["attributes"]["group"] in ("genre", "theme")],
+                description=cls._plain_desc(site._pick(attrs.get("description") or {})),
+                rating=scores.get(m["id"], 0.0),
+            ))
+        if filters and filters.rating:  # the API can't filter by rating, so this page is just thinned out
+            results = [r for r in results if r.rating >= filters.rating]
+        return results, pages if data["data"] else page_no
+
+    def _tags(self) -> dict[str, str]:
+        if not MangaDex._tag_ids:
+            MangaDex._tag_ids = {t["attributes"]["name"]["en"]: t["id"] for t in self._json("/manga/tag")["data"]}
+        return MangaDex._tag_ids
+
+    def page_urls(self, chapter: Chapter) -> list[str]:
+        server = self._json(f"/at-home/server/{chapter.url.rsplit('/', 1)[-1]}")
+        ch = server["chapter"]
+        if not ch["data"]:
+            raise SiteError(f"No pages found for chapter {fmt_num(chapter.number)}")
+        return [f"{server['baseUrl']}/data/{ch['hash']}/{f}" for f in ch["data"]]
 
 
-SITES = [FanFox]
+SITES = [FanFox, MangaDex]
 
 
 def site_for(url: str):
